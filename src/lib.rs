@@ -17,14 +17,14 @@ mod enums;
 
 
 
-pub struct MTNMono {
+pub struct Momo {
     pub url: String,
     environment: Environment,
     api_user: String,
     api_key: String,
 }
 
-impl MTNMono {
+impl Momo {
     /*
         create a new instance of MTNMoney
         @param url
@@ -32,13 +32,13 @@ impl MTNMono {
         @param environment
         @return MTNMoney
      */
-    pub async fn new(url: String, api_user: String, environment: Environment) -> Result<MTNMono, Box<dyn Error>> {
+    pub async fn new(url: String, api_user: String, environment: Environment) -> Result<Momo, Box<dyn Error>> {
         dotenv::dotenv().ok();
         let provisioning = Provisioning::new(url.clone());
         let _create_sandbox = provisioning.create_sandox(&api_user).await?;
         let api = provisioning.create_api_information(&api_user).await?;
        Ok(
-            MTNMono{
+            Momo{
                 url,
                 environment,
                 api_user,
