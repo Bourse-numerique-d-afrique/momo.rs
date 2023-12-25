@@ -1,0 +1,16 @@
+
+use reqwest::Body;
+use serde::{Serialize, Deserialize};
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DeliveryNotification {
+    #[serde(rename = "notificationMessage")]
+    pub notification_message: String
+}
+
+impl From<DeliveryNotification> for Body {
+    fn from(delivery_notification: DeliveryNotification) -> Self {
+        Body::from(serde_json::to_string(&delivery_notification).unwrap())
+    }
+}

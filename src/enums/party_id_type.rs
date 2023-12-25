@@ -1,0 +1,6 @@
+
+
+
+pub enum PartyIdType {
+    MSISDN,
+}
