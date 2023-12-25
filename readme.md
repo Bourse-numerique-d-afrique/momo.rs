@@ -2,16 +2,16 @@
 #
 [![.github/workflows/deployment.yml](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/deployment.yml/badge.svg)](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/deployment.yml)
 
-# ## Installation
+### Installation
 #
-# Add this to your `Cargo.toml`:
+### Add this to your `Cargo.toml`:
 #
 ```toml
 [dependencies]
 momo = "0.1.0"
 ```
 
-# ## Usage
+# Usage
 # # Create a new instance of momo
 # To create an instance of momo you need to have an api_user, url and environment (sandbox or production).
  ```rust
