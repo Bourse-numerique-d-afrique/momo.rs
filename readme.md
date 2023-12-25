@@ -6,12 +6,12 @@
 
 
 ### Installation
-#
-#
 ```toml
 [dependencies]
 momo = "0.1.0"
 ```
+
+or you can use cargo add
 
 ```cli
 cargo add momo
@@ -31,7 +31,8 @@ To create an instance of momo you need to have an api_user, url and environment 
     }
  ```
 ### Usage for Collections
-
+To create an instance of collection you need to have a primary_key and secondary_key of the collection product.
+You can get the primary_key and secondary_key from https://momodeveloper.mtn.com when you create a collection product.
  ```rust
     use momo::Momo;
 
@@ -47,7 +48,8 @@ To create an instance of momo you need to have an api_user, url and environment 
 
 
 ### Usage for Disbursements
-
+To create an instance of disbursement you need to have a primary_key and secondary_key of the disbursement product.
+You can get the primary_key and secondary_key from https://momodeveloper.mtn.com when you create a disbursement product.
  ```rust
     use momo::Momo;
 
@@ -62,7 +64,8 @@ To create an instance of momo you need to have an api_user, url and environment 
  ```
 
 ### Usage for Remittances
-
+To create an instance of disbursement you need to have a primary_key and secondary_key of the remittance product.
+You can get the primary_key and secondary_key from https://momodeveloper.mtn.com when you create a remittance product.
  ```rust
     use momo::Momo;
 
