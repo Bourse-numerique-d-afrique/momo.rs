@@ -11,9 +11,9 @@
 momo = "0.1.0"
 ```
 
-# Usage
-# # Create a new instance of momo
-# To create an instance of momo you need to have an api_user, url and environment (sandbox or production).
+### Usage
+### Create a new instance of momo
+To create an instance of momo you need to have an api_user, url and environment (sandbox or production).
  ```rust
     use momo::Momo;
 
@@ -23,7 +23,7 @@ momo = "0.1.0"
         let momo = Momo::new("url", "api_user", Environment::Sandbox); // create a new instance of momo
     }
  ```
- # ## Usage for Collections
+### Usage for Collections
 
  ```rust
     use momo::Momo;
@@ -39,7 +39,7 @@ momo = "0.1.0"
  ```
 
 
-# # Usage for Disbursements
+### Usage for Disbursements
 
  ```rust
     use momo::Momo;
@@ -54,7 +54,7 @@ momo = "0.1.0"
     }
  ```
 
-# # Usage for Remittances
+### Usage for Remittances
 
  ```rust
     use momo::Momo;
