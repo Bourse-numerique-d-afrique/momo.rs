@@ -1,6 +1,6 @@
 use crate::{
-    enums::environment::Environment,
-    requests::{refund::Refund, transfer::Transfer},
+    enums::{environment::Environment, access_type::AccessType},
+    requests::{refund::Refund, transfer::Transfer, bc_authorize::BcAuthorize},
     responses::{
         account_info::BasicUserInfoJsonResponse, account_info_consent::UserInfoWithConsent,
         bcauthorize_response::BCAuthorizeResponse, oauth2tokenresponse::OAuth2TokenResponse,
@@ -8,11 +8,13 @@ use crate::{
     },
     traits::{account::Account, auth::MOMOAuthorization},
 };
-use base64::{engine::general_purpose, Engine as _};
+
 use chrono::{Utc, DateTime, NaiveDateTime};
 use rusqlite::{params, Connection, Result};
 
 use crate::structs::balance::Balance;
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
 
 pub struct Disbursements {
     pub url: String,
@@ -21,6 +23,7 @@ pub struct Disbursements {
     pub environment: Environment,
     pub api_user: String,
     pub api_key: String,
+    pub conn_pool: Pool<SqliteConnectionManager>,
 }
 
 impl Disbursements {
@@ -42,6 +45,8 @@ impl Disbursements {
             )",
             params![],
         ).unwrap();
+        let manager = SqliteConnectionManager::file("collection_access_tokens.db");
+        let pool = r2d2::Pool::new(manager).expect("Failed to create pool.");
         Disbursements {
             url,
             primary_key,
@@ -49,6 +54,7 @@ impl Disbursements {
             environment,
             api_key,
             api_user,
+            conn_pool: pool,
         }
     }
 
@@ -57,7 +63,7 @@ impl Disbursements {
         @return Ok(())
      */
     fn insert_access_token(&self, access_token: &str, token_type: &str, expires_in: i32) -> Result<(), Box<dyn std::error::Error>> {
-        let conn = Connection::open("disbursement_access_tokens.db")?;
+        let conn = self.conn_pool.get()?;
         conn.execute(
             "INSERT INTO access_tokens (access_token, token_type, expires_in) VALUES (?1, ?2, ?3)",
             params![access_token, token_type, expires_in],
@@ -71,7 +77,7 @@ impl Disbursements {
         @return TokenResponse
      */
     async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
-        let conn = Connection::open("disbursement_access_tokens.db")?;
+        let conn = self.conn_pool.get()?;
         let mut stmt = conn.prepare("SELECT * FROM access_tokens ORDER BY created_at DESC LIMIT 1")?;
         let access_result = stmt.query(params![]);
         let mut access = access_result.unwrap();
@@ -414,11 +420,10 @@ impl Account for Disbursements {
 
 impl MOMOAuthorization for Disbursements {
     async fn create_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
-        let authorization = self.encode(&self.primary_key, &self.secondary_key);
         let client = reqwest::Client::new();
         let res = client
             .post(format!("{}/disbursement/token/", self.url))
-            .header("Authorization", format!("Basic {}", authorization))
+            .basic_auth(self.api_user.to_string(), Some(self.api_key.to_string()))
             .header("Cache-Control", "no-cache")
             .header("Content-type", "application/x-www-form-urlencoded")
             .header("Ocp-Apim-Subscription-Key", &self.primary_key)
@@ -434,14 +439,14 @@ impl MOMOAuthorization for Disbursements {
     async fn create_o_auth_2_token(
         &self,
     ) -> Result<OAuth2TokenResponse, Box<dyn std::error::Error>> {
-        let authorization = self.encode(&self.primary_key, &self.secondary_key);
+
         let client = reqwest::Client::new();
         let res = client
             .post(format!(
                 "{}/disbursement/oauth2/token/",
                 self.url
             ))
-            .header("Authorization", format!("Basic {}", authorization))
+            .basic_auth(self.api_user.to_string(), Some(self.api_key.to_string()))
             .header("X-Target-Environment", self.environment.to_string())
             .header("Content-type", "application/x-www-form-urlencoded")
             .header("Cache-Control", "no-cache")
@@ -454,18 +459,18 @@ impl MOMOAuthorization for Disbursements {
     }
 
     async fn bc_authorize(&self, msisdn: String) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
-        let authorization = self.encode(&self.primary_key, &self.secondary_key);
         let client = reqwest::Client::new();
         let res = client
             .post(format!(
                 "{}/disbursement/v1_0/bc-authorize",
                 self.url
             ))
-            .header("Authorization", format!("Basic {}", authorization))
+            .basic_auth(self.api_user.to_string(), Some(self.api_key.to_string()))
             .header("X-Target-Environment", self.environment.to_string())
             .header("X-Callback-Url", "callback")
             .header("Content-type", "application/x-www-form-urlencoded")
             .header("Cache-Control", "no-cache")
+            .body(BcAuthorize{login_hint: format!("ID:{}/MSISDN", msisdn), scope: "profile".to_string(), access_type: AccessType::Offline}) // scope can be profile
             .send()
             .await?;
 
@@ -473,10 +478,298 @@ impl MOMOAuthorization for Disbursements {
         let token_response: BCAuthorizeResponse = serde_json::from_str(&body)?;
         Ok(token_response)
     }
+}
 
-    fn encode(&self, user_id: &str, user_api_key: &str) -> String {
-        let concatenated_str = format!("{}:{}", user_id, user_api_key);
-        let encoded_str = general_purpose::STANDARD.encode(&concatenated_str);
-        encoded_str
+#[cfg(test)]
+mod tests {
+    use std::env;
+    use dotenv::dotenv;
+    use crate::{
+        enums::environment::Environment,
+        products::disbursements::Disbursements,
+        traits::{account::Account, auth::MOMOAuthorization},
+    };
+
+    #[tokio::test]
+    async fn test_get_account_balance() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key );
+        let balance = disbursements.get_account_balance().await.unwrap();
+        println!("{:?}", balance);
     }
+
+    #[tokio::test]
+    async fn test_get_account_balance_in_specific_currency() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
+        );
+        let balance = disbursements.get_account_balance_in_specific_currency("EUR".to_string()).await.unwrap();
+        println!("{:?}", balance);
+    }
+
+    #[tokio::test]
+    async fn test_get_basic_user_info() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
+        );
+        let basic_user_info = disbursements.get_basic_user_info("256774290781").await.unwrap();
+        println!("{:?}", basic_user_info);
+    }
+
+    #[tokio::test]
+    async fn test_get_user_info_with_consent() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
+        );
+        let user_info_with_consent = disbursements.get_user_info_with_consent().await.unwrap();
+        println!("{:?}", user_info_with_consent);
+    }
+
+    #[tokio::test]
+    async fn test_validate_account_holder_status() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
+        );
+        let validate_account_holder_status = disbursements.validate_account_holder_status("256774290781", "MSISDN").await.unwrap();
+        println!("{:?}", validate_account_holder_status);
+    }
+
+    #[tokio::test]
+    async fn test_create_access_token() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
+        );
+        let access_token = disbursements.create_access_token().await.unwrap();
+        println!("{:?}", access_token);
+    }
+
+    #[tokio::test]
+    async fn test_create_o_auth_2_token() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
+        );
+        let o_auth_2_token = disbursements.create_o_auth_2_token().await.unwrap();
+        println!("{:?}", o_auth_2_token);
+    }
+
+    #[tokio::test]
+    async fn test_bc_authorize() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
+        );
+        let bc_authorize = disbursements.bc_authorize("256774290781".to_string()).await.unwrap();
+        println!("{:?}", bc_authorize);
+    }
+
+    #[tokio::test]
+    async fn test_deposit_v1() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
+        );
+        disbursements.deposit_v1().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_deposit_v2() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        disbursements.deposit_v2().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_deposit_status() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
+        );
+        disbursements.get_deposit_status().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_refund_status() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
+        );
+        disbursements.get_refund_status("reference_id").await.unwrap();
+    }
+
+
+
+    #[tokio::test]
+    async fn test_refund_v1() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
+        );
+
+        let refund = crate::requests::refund::Refund {
+            amount: "1000".to_string(),
+            currency: "EUR".to_string(),
+            external_id: "123456789".to_string(),
+            payee_note: "payee_note".to_string(),
+            payer_message: "payer_message".to_string(),
+            reference_id_to_refund: "reference_id".to_string(),
+        };
+        disbursements.refund_v1(refund).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_refund_v2() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
+        );
+
+        let refund = crate::requests::refund::Refund {
+            amount: "1000".to_string(),
+            currency: "EUR".to_string(),
+            external_id: "123456789".to_string(),
+            payee_note: "payee_note".to_string(),
+            payer_message: "payer_message".to_string(),
+            reference_id_to_refund: "reference_id".to_string(),
+        };
+        disbursements.refund_v2(refund).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_transfer() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
+        );
+
+        let transfer = crate::requests::transfer::Transfer {
+            amount: "1000".to_string(),
+            currency: "EUR".to_string(),
+            external_id: "123456789".to_string(),
+            payee_note: "payee_note".to_string(),
+            payer_message: "payer_message".to_string(),
+            payee: crate::structs::party::Party {
+                party_id_type: "MSISDN".to_string(),
+                party_id: "256774290781".to_string(),
+            },
+        };
+        disbursements.transfer(transfer).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_transfer_status() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let disbursements = Disbursements::new(
+            mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
+        );
+        disbursements.get_transfer_status().await.unwrap();
+    }
+
+  
+
 }

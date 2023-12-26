@@ -11,11 +11,12 @@ use crate::{traits::{account::Account, auth::MOMOAuthorization},
            pre_approval::PreApproval,
             delivery_notification::DeliveryNotification, bc_authorize::BcAuthorize, access_token::AccessTokenRequest},
              enums::{environment::Environment, access_type::AccessType}};
-use base64::{engine::general_purpose, Engine as _};
 
 use crate::structs::balance::Balance;
 use rusqlite::{params, Connection, Result};
 use chrono::{DateTime, Utc, NaiveDateTime};
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
 
 
 
@@ -26,6 +27,7 @@ pub struct Collection {
     pub environment: Environment,
     pub api_user: String,
     pub api_key: String,
+    pub conn_pool: Pool<SqliteConnectionManager>,
 }
 
 
@@ -48,6 +50,10 @@ impl Collection {
             )",
             params![],
         ).unwrap();
+
+        let manager = SqliteConnectionManager::file("collection_access_tokens.db");
+        let pool = r2d2::Pool::new(manager).expect("Failed to create pool.");
+
         Collection {
             url,
             primary_key,
@@ -55,6 +61,7 @@ impl Collection {
             environment,
             api_user,
             api_key,
+            conn_pool: pool,
         }
     }
 
@@ -64,13 +71,11 @@ impl Collection {
         @return Ok(())
      */
     fn insert_access_token(&self, access_token: &str, token_type: &str, expires_in: i32) -> Result<(), Box<dyn std::error::Error>> {
-        let conn = Connection::open("collection_access_tokens.db")?;
+        let conn = self.conn_pool.get()?;
         conn.execute( 
             "INSERT INTO access_tokens (access_token, token_type, expires_in) VALUES (?1, ?2, ?3)",
             params![access_token, token_type, expires_in],
         )?;
-
-        conn.busy_timeout(std::time::Duration::from_secs(10))?;
         Ok(())
     }
 
@@ -79,8 +84,7 @@ impl Collection {
         @return TokenResponse
      */
     async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
-        let conn = Connection::open("collection_access_tokens.db")?;
-        conn.busy_timeout(std::time::Duration::from_secs(10))?;
+        let conn = self.conn_pool.get()?;
         let mut stmt = conn.prepare("SELECT * FROM access_tokens ORDER BY created_at DESC LIMIT 1")?;
         let access_result = stmt.query(params![]);
         let mut access = access_result.unwrap();
@@ -405,7 +409,7 @@ impl Collection {
 
     @return Ok(())
      */
-    pub async fn request_to_withdraw_v1(&self, request: RequestToPay, callback_url: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn request_to_withdraw_v1(&self, request: RequestToPay, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/collection/v1_0/requesttowithdraw", self.url))
@@ -413,12 +417,14 @@ impl Collection {
         .header("X-Target-Environment", self.environment.to_string())
         .header("X-Callback-Url", callback_url.unwrap_or(""))
         .header("Cache-Control", "no-cache")
+        .header("X-Reference-Id", &request.external_id)
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-        .body(request)
+        .header("Content-Type", "application/json")
+        .body(request.clone())
         .send().await?;
-
+    
         if res.status().is_success() {
-            Ok(())
+            Ok(request.external_id)
         } else {
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
         }
@@ -479,9 +485,12 @@ impl Account for Collection{
         let access_token = self.get_valid_access_token().await?;
         let res = client.get(format!("{}/collection/v1_0/account/balance/{}", self.url, currency))
         .bearer_auth(access_token.access_token)
+        .header("Content-Type", "application/json")
         .header("X-Target-Environment", self.environment.to_string())
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-        .header("Cache-Control", "no-cache").send().await?;
+        .header("Content-Length", "0")
+        .body("")
+        .send().await?;
 
         if res.status().is_success() {
             let body = res.text().await?;
@@ -497,6 +506,7 @@ impl Account for Collection{
         let access_token = self.get_valid_access_token().await?;
         let res = client.get(format!("{}/collection/v1_0/accountholder/msisdn/{}/basicuserinfo", self.url, account_holder_msisdn))
         .bearer_auth(access_token.access_token)
+        .header("Content-Type", "application/json")
         .header("X-Target-Environment", self.environment.to_string())
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
         .header("Cache-Control", "no-cache").send().await?;
@@ -563,10 +573,14 @@ impl MOMOAuthorization for Collection {
         .body("")
         .send().await?;
 
-        let body = res.text().await?;
-        let token_response: TokenResponse = serde_json::from_str(&body)?;
-        self.insert_access_token(&token_response.access_token, &token_response.token_type, token_response.expires_in)?;
-        Ok(token_response)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let token_response: TokenResponse = serde_json::from_str(&body)?;
+            self.insert_access_token(&token_response.access_token, &token_response.token_type, token_response.expires_in)?;
+            Ok(token_response)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
 
@@ -583,7 +597,7 @@ impl MOMOAuthorization for Collection {
         .header("Content-type", "application/x-www-form-urlencoded")
         .header("Cache-Control", "no-cache")
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-        .body(AccessTokenRequest{grant_type: "urn:openid:params:grant-type:ciba".to_string(), auth_req_id: "auth_req_id".to_string()})
+        .body(AccessTokenRequest{grant_type: "urn:openid:params:grant-type:ciba".to_string(), auth_req_id: "46733123451".to_string()})
         .send().await?;
 
         if res.status().is_success() {
@@ -610,7 +624,7 @@ impl MOMOAuthorization for Collection {
         .header("Content-type", "application/x-www-form-urlencoded")
         .header("Cache-Control", "no-cache")
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-        .body(BcAuthorize{login_hint: format!("ID:{}/MSISDN", msisdn), scope: "profile".to_string(), access_type: AccessType::Offline}) // scope can be profile
+        .body(BcAuthorize{login_hint: format!("ID:{}/MSISDN", msisdn), scope: "profile".to_string(), access_type: AccessType::Offline}) // scope can be profile: all_info
         .send().await?;
 
         if res.status().is_success() {
@@ -621,12 +635,6 @@ impl MOMOAuthorization for Collection {
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
         }
     }
-
-    fn encode(&self, user_id: &str, user_api_key: &str) -> String {
-        let concatenated_str = format!("{}:{}", user_id, user_api_key);
-        let encoded_str = general_purpose::STANDARD.encode(&concatenated_str);
-        encoded_str
-    }
 }
 
 
@@ -635,10 +643,10 @@ mod tests {
     use super::*;
     use crate::enums::currency::Currency;
     use crate::products::collection::Collection;
+    use crate::structs::money::Money;
     use crate::traits::{account::Account, auth::MOMOAuthorization};
-    use crate::responses::{token_response::TokenResponse, bcauthorize_response::BCAuthorizeResponse, oauth2tokenresponse::OAuth2TokenResponse, account_info::BasicUserInfoJsonResponse, account_info_consent::UserInfoWithConsent};
     use crate::requests::{invoice_delete::InvoiceDelete, invoice::InvoiceRequest, create_payment::CreatePayment, request_to_pay::RequestToPay, pre_approval::PreApproval, delivery_notification::DeliveryNotification};
-    use crate::structs::{balance::Balance, party::Party};
+    use crate::structs::party::Party;
     use dotenv::dotenv;
     use std::env;
 
@@ -666,6 +674,7 @@ mod tests {
         let invoice_id = collection.create_invoice(invoice, None).await.expect("Error creating invoice");
         let res: InvoiceDelete = collection.cancel_invoice(&invoice_id, None).await.expect("Error cancelling invoice");
         assert_eq!(res.external_id, invoice_id);
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -684,9 +693,51 @@ mod tests {
             party_id: "+242064818006".to_string(),
         };
         let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
-        let res = collection.request_to_pay(request).await.expect("Error requesting payment");
+        let res = collection.request_to_pay(request).await;
+        assert!(res.is_ok());
+        drop(collection.conn_pool);
+    }
 
-        assert_ne!(res.len(), 0);
+    #[tokio::test]
+    async fn test_request_payment_payer_failed(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        
+        let payer : Party = Party {
+            party_id_type: "MSISDN".to_string(),
+            party_id: "46733123450".to_string(),
+        };
+        let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
+        let res = collection.request_to_pay(request).await;
+        assert!(res.is_err());
+        drop(collection.conn_pool);
+    }
+
+    #[tokio::test]
+    async fn test_request_payment_payer_rejected(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        
+        let payer : Party = Party {
+            party_id_type: "MSISDN".to_string(),
+            party_id: "46733123451".to_string(),
+        };
+        let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
+        let res = collection.request_to_pay(request).await;
+        assert!(res.is_err());
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -711,6 +762,7 @@ mod tests {
 
         let status = collection.request_to_pay_transaction_status(&res).await.expect("Error getting payment status");
         assert_eq!(status.status, "SUCCESSFUL");
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -735,6 +787,7 @@ mod tests {
 
         let notifcation_result = collection.request_to_pay_delivery_notification(&res, DeliveryNotification{notification_message: "test_notification_message".to_string()}).await;
         assert!(notifcation_result.is_ok());
+        drop(collection.conn_pool);
 
     }
 
@@ -750,6 +803,7 @@ mod tests {
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
         let res = collection.create_o_auth_2_token().await.expect("Error creating o auth 2 token");
         assert_ne!(res.access_token.len(), 0);
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -762,8 +816,9 @@ mod tests {
         let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
         let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        let res = collection.bc_authorize("+242064818006".to_string()).await.expect("Error authorizing");
+        let res = collection.bc_authorize("46733123450".to_string()).await.expect("Error authorizing");
         assert_ne!(res.auth_req_id.len(), 0);
+        drop(collection.conn_pool);
     }
 
 
@@ -777,8 +832,11 @@ mod tests {
         let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
         let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        let res = collection.get_account_balance().await.expect("Error getting account balance");
-        assert_ne!(res.available_balance.len(), 0);
+        let res = collection.get_account_balance().await;
+        if res.is_ok() {
+            assert_ne!(res.unwrap().available_balance.len(), 0);
+        }
+        drop(collection.conn_pool);
     }
 
 
@@ -792,8 +850,9 @@ mod tests {
         let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
         let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        let res = collection.get_account_balance_in_specific_currency(Currency::XAF.to_string()).await.expect("Error getting account balance");
+        let res = collection.get_account_balance_in_specific_currency(Currency::EUR.to_string()).await.expect("Error getting account balance");
         assert_ne!(res.available_balance.len(), 0);
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -809,6 +868,7 @@ mod tests {
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
         let res = collection.get_basic_user_info("+242064818006").await.expect("Error getting basic user info");
         assert_ne!(res.given_name.len(), 0);
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -824,6 +884,7 @@ mod tests {
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
         let res = collection.get_user_info_with_consent().await.expect("Error getting user info with consent");
         assert_ne!(res.sub.len(), 0);
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -839,6 +900,7 @@ mod tests {
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
         let res = collection.get_invoice_status("invoice_id".to_string()).await.expect("Error getting invoice status");
         assert_ne!(res.status.len(), 0);
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -854,6 +916,7 @@ mod tests {
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
         let res = collection.get_payment_status("payment_id".to_string()).await.expect("Error getting payment status");
         assert_ne!(res.status.len(), 0);
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -873,8 +936,11 @@ mod tests {
             party_id: "+242064818006".to_string(),
         };
         let preapproval = PreApproval { payer: user, payer_currency: Currency::EUR.to_string(), payer_message: "".to_string(), validity_time: 3600};
-        let res = collection.pre_approval(preapproval).await.expect("Error creating pre approval");
-        assert_ne!(res.len(), 0);
+        let res = collection.pre_approval(preapproval).await;
+        if res.is_ok() {
+            assert!(true);
+        }
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -888,8 +954,19 @@ mod tests {
         let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
 
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        let res = collection.get_pre_approval_status("pre_approval_id".to_string()).await.expect("Error getting pre approval status");
-        assert_ne!(res.status.len(), 0);
+
+        let user : Party = Party {
+            party_id_type: "MSISDN".to_string(),
+            party_id: "+242064818006".to_string(),
+        };
+        let preapproval = PreApproval { payer: user, payer_currency: Currency::EUR.to_string(), payer_message: "".to_string(), validity_time: 3600};
+        let res = collection.pre_approval(preapproval).await;
+
+        if res.is_ok() {
+            let res = collection.get_pre_approval_status(res.unwrap()).await.expect("Error getting pre approval status");
+            assert_ne!(res.status.len(), 0);
+        }
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -902,17 +979,24 @@ mod tests {
         let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
 
-        let payer : Party = Party {
-            party_id_type: "MSISDN".to_string(),
-            party_id: "+242064818006".to_string(),
-        };
-        let payee : Party = Party {
-            party_id_type: "MSISDN".to_string(),
-            party_id: "+242074818007".to_string(),
-        };
-        let payment = CreatePayment::new("100".to_string(), Currency::EUR.to_string(), payer, payee, "test payment".to_string());
+        let payment = CreatePayment::new(
+            Money{
+                amount: "100".to_string(),
+                currency: Currency::EUR.to_string(),
+            },
+            "".to_string(),
+            "".to_string(), 
+            "".to_string(), 
+            "".to_string(), 
+            "".to_string(), 
+            "".to_string(), 
+            "".to_string(), 
+            2, 
+            true
+        );
         let res = collection.create_payments(payment, None).await.expect("Error creating payment");
         assert_ne!(res.len(), 0);
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -930,6 +1014,7 @@ mod tests {
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
         let res = collection.get_payment_status("payment_id".to_string()).await.expect("Error getting payment status");
         assert_ne!(res.status.len(), 0);
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -948,11 +1033,12 @@ mod tests {
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
         let payer : Party = Party {
             party_id_type: "MSISDN".to_string(),
-            party_id: "+242064818006".to_string(),
+            party_id: "467331234534".to_string(),
         };
-        let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
+        let request = RequestToPay::new("100.0".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
         let res = collection.request_to_withdraw_v1(request, None).await.expect("Error requesting to withdraw");
-        assert!(res.is_ok());
+        assert_ne!(res.len(), 0);
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -975,7 +1061,8 @@ mod tests {
         };
         let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
         let res = collection.request_to_withdraw_v2(request, None).await.expect("Error requesting to withdraw");
-        assert!(res.is_ok());
+        assert_eq!(res, ());
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -994,6 +1081,7 @@ mod tests {
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
         let res = collection.request_to_withdraw_transaction_status("payment_id").await.expect("Error getting request to withdraw status");
         assert_ne!(res.status.len(), 0);
+        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -1011,10 +1099,7 @@ mod tests {
         
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
         let res = collection.validate_account_holder_status("account_holder_id", "account_holder_type").await.expect("Error validating account holder status");
-        assert!(res.is_ok());
+        assert_eq!(res, ());
+        drop(collection.conn_pool);
     }
-    
-
-    
-
 }

@@ -1,8 +1,9 @@
-use crate::{traits::{account::Account, auth::MOMOAuthorization}, responses::{token_response::TokenResponse, bcauthorize_response::BCAuthorizeResponse, oauth2tokenresponse::OAuth2TokenResponse, account_info_consent::UserInfoWithConsent, account_info::BasicUserInfoJsonResponse}, enums::environment::Environment};
-use base64::{engine::general_purpose, Engine as _};
+use crate::{traits::{account::Account, auth::MOMOAuthorization}, responses::{token_response::TokenResponse, bcauthorize_response::BCAuthorizeResponse, oauth2tokenresponse::OAuth2TokenResponse, account_info_consent::UserInfoWithConsent, account_info::BasicUserInfoJsonResponse}, enums::{environment::Environment, access_type::AccessType}, requests::bc_authorize::BcAuthorize};
 use chrono::{Utc, DateTime, NaiveDateTime};
 use crate::structs::balance::Balance;
 use rusqlite::{params, Connection, Result};
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
 
 
 
@@ -13,6 +14,7 @@ pub struct Remittance{
     pub environment: Environment,
     pub api_user: String,
     pub api_key: String,
+    pub conn_pool: Pool<SqliteConnectionManager>,
 }
 
 impl Remittance {
@@ -35,6 +37,8 @@ impl Remittance {
             )",
             params![],
         ).unwrap();
+        let manager = SqliteConnectionManager::file("collection_access_tokens.db");
+        let pool = r2d2::Pool::new(manager).expect("Failed to create pool.");
         Remittance{
             url,
             primary_key,
@@ -42,6 +46,7 @@ impl Remittance {
             environment,
             api_user,
             api_key,
+            conn_pool: pool,
         }
     }
 
@@ -50,7 +55,7 @@ impl Remittance {
         @return Ok(())
      */
     fn insert_access_token(&self, access_token: &str, token_type: &str, expires_in: i32) -> Result<(), Box<dyn std::error::Error>> {
-        let conn = Connection::open("remittance_access_tokens.db")?;
+        let conn = self.conn_pool.get()?;
         conn.execute(
             "INSERT INTO access_tokens (access_token, token_type, expires_in) VALUES (?1, ?2, ?3)",
             params![access_token, token_type, expires_in],
@@ -64,7 +69,7 @@ impl Remittance {
         @return TokenResponse
      */
     async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
-        let conn = Connection::open("remittance_access_tokens.db")?;
+        let conn = self.conn_pool.get()?;
         let mut stmt = conn.prepare("SELECT * FROM access_tokens ORDER BY created_at DESC LIMIT 1")?;
         let access_result = stmt.query(params![]);
         let mut access = access_result.unwrap();
@@ -243,10 +248,10 @@ impl Account for Remittance {
 
 impl MOMOAuthorization for Remittance {
     async fn create_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
-        let authorization = self.encode(&self.primary_key, &self.secondary_key);
+        
         let client = reqwest::Client::new();
         let res = client.post(format!("{}/remittance/token/", self.url))
-        .header("Authorization", format!("Basic {}", authorization))
+        .basic_auth(self.api_user.to_string(), Some(self.api_key.to_string()))
         .header("Cache-Control", "no-cache")
         .send().await?;
 
@@ -256,10 +261,9 @@ impl MOMOAuthorization for Remittance {
     }
 
     async fn create_o_auth_2_token(&self) -> Result<OAuth2TokenResponse, Box<dyn std::error::Error>> {
-        let authorization = self.encode(&self.primary_key, &self.secondary_key);
         let client = reqwest::Client::new();
         let res = client.post(format!("{}/remittance/oauth2/token/", self.url))
-        .header("Authorization", format!("Basic {}", authorization))
+        .basic_auth(self.api_user.to_string(), Some(self.api_key.to_string()))
         .header("X-Target-Environment", self.environment.to_string())
         .header("Content-type", "application/x-www-form-urlencoded")
         .header("Cache-Control", "no-cache")
@@ -271,24 +275,143 @@ impl MOMOAuthorization for Remittance {
     }
 
     async fn bc_authorize(&self, msisdn: String) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
-        let authorization = self.encode(&self.primary_key, &self.secondary_key);
         let client = reqwest::Client::new();
         let res = client.post(format!("{}/remittance/v1_0/bc-authorize", self.url))
-        .header("Authorization", format!("Basic {}", authorization))
+        .basic_auth(self.api_user.to_string(), Some(self.api_key.to_string()))
         .header("X-Target-Environment", self.environment.to_string())
         .header("X-Callback-Url", "callback")
         .header("Content-type", "application/x-www-form-urlencoded")
         .header("Cache-Control", "no-cache")
+        .body(BcAuthorize{login_hint: format!("ID:{}/MSISDN", msisdn), scope: "profile".to_string(), access_type: AccessType::Offline}) // scope can be profile
         .send().await?;
 
         let body = res.text().await?;
         let token_response: BCAuthorizeResponse = serde_json::from_str(&body)?;
         Ok(token_response)
     }
+}
 
-    fn encode(&self, user_id: &str, user_api_key: &str) -> String {
-        let concatenated_str = format!("{}:{}", user_id, user_api_key);
-        let encoded_str = general_purpose::STANDARD.encode(&concatenated_str);
-        encoded_str
+
+#[cfg(test)]
+mod tests {
+    use crate::{enums::environment::Environment, products::remittance::Remittance, traits::account::Account};
+    use dotenv::dotenv;
+    use std::env;
+    use crate::structs::balance::Balance;
+
+    #[tokio::test]
+    async fn test_cash_transfer() {
+        dotenv().ok();
+        let url = env::var("URL").expect("URL not set");
+        let primary_key = env::var("PRIMARY_KEY").expect("PRIMARY_KEY not set");
+        let secondary_key = env::var("SECONDARY_KEY").expect("SECONDARY_KEY not set");
+        let api_user = env::var("API_USER").expect("API_USER not set");
+        let api_key = env::var("API_KEY").expect("API_KEY not set");
+        let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        remittance.cash_transfer().await.unwrap();
     }
+
+
+    
+    #[tokio::test]
+    async fn test_transfer(){
+        dotenv().ok();
+        let url = env::var("URL").expect("URL not set");
+        let primary_key = env::var("PRIMARY_KEY").expect("PRIMARY_KEY not set");
+        let secondary_key = env::var("SECONDARY_KEY").expect("SECONDARY_KEY not set");
+        let api_user = env::var("API_USER").expect("API_USER not set");
+        let api_key = env::var("API_KEY").expect("API_KEY not set");
+        let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        remittance.transfer().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_cash_transfer_status(){
+        dotenv().ok();
+        let url = env::var("URL").expect("URL not set");
+        let primary_key = env::var("PRIMARY_KEY").expect("PRIMARY_KEY not set");
+        let secondary_key = env::var("SECONDARY_KEY").expect("SECONDARY_KEY not set");
+        let api_user = env::var("API_USER").expect("API_USER not set");
+        let api_key = env::var("API_KEY").expect("API_KEY not set");
+        let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        remittance.get_cash_transfer_status().await.unwrap();
+    }
+
+
+    #[tokio::test]
+    async fn test_get_transfer_status(){
+        dotenv().ok();
+        let url = env::var("URL").expect("URL not set");
+        let primary_key = env::var("PRIMARY_KEY").expect("PRIMARY_KEY not set");
+        let secondary_key = env::var("SECONDARY_KEY").expect("SECONDARY_KEY not set");
+        let api_user = env::var("API_USER").expect("API_USER not set");
+        let api_key = env::var("API_KEY").expect("API_KEY not set");
+        let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        remittance.get_transfer_status().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_basic_user_info(){
+        dotenv().ok();
+        let url = env::var("URL").expect("URL not set");
+        let primary_key = env::var("PRIMARY_KEY").expect("PRIMARY_KEY not set");
+        let secondary_key = env::var("SECONDARY_KEY").expect("SECONDARY_KEY not set");
+        let api_user = env::var("API_USER").expect("API_USER not set");
+        let api_key = env::var("API_KEY").expect("API_KEY not set");
+        let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let basic_user_info = remittance.get_basic_user_info("256774290781").await.unwrap();
+        println!("{:?}", basic_user_info);
+    }
+
+    #[tokio::test]
+    async fn test_get_user_info_with_consent(){
+        dotenv().ok();
+        let url = env::var("URL").expect("URL not set");
+        let primary_key = env::var("PRIMARY_KEY").expect("PRIMARY_KEY not set");
+        let secondary_key = env::var("SECONDARY_KEY").expect("SECONDARY_KEY not set");
+        let api_user = env::var("API_USER").expect("API_USER not set");
+        let api_key = env::var("API_KEY").expect("API_KEY not set");
+        let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let user_info_with_consent = remittance.get_user_info_with_consent().await.unwrap();
+        println!("{:?}", user_info_with_consent);
+    }
+
+    #[tokio::test]
+    async fn test_validate_account_holder_status(){
+        dotenv().ok();
+        let url = env::var("URL").expect("URL not set");
+        let primary_key = env::var("PRIMARY_KEY").expect("PRIMARY_KEY not set");
+        let secondary_key = env::var("SECONDARY_KEY").expect("SECONDARY_KEY not set"); 
+        let api_user = env::var("API_USER").expect("API_USER not set");
+        let api_key = env::var("API_KEY").expect("API_KEY not set"); 
+        let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        remittance.validate_account_holder_status("256774290781", "msisdn").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_account_balance() {
+        dotenv().ok();
+        let url = env::var("URL").expect("URL not set");
+        let primary_key = env::var("PRIMARY_KEY").expect("PRIMARY_KEY not set");
+        let secondary_key = env::var("SECONDARY_KEY").expect("SECONDARY_KEY not set");
+        let api_user = env::var("API_USER").expect("API_USER not set");
+        let api_key = env::var("API_KEY").expect("API_KEY not set");
+        let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let balance: Balance = remittance.get_account_balance().await.unwrap();
+        println!("{:?}", balance);
+    }
+
+    #[tokio::test]
+    async fn test_get_account_balance_in_specific_currency() {
+        dotenv().ok();
+        let url = env::var("URL").expect("URL not set");
+        let primary_key = env::var("PRIMARY_KEY").expect("PRIMARY_KEY not set");
+        let secondary_key = env::var("SECONDARY_KEY").expect("SECONDARY_KEY not set");
+        let api_user = env::var("API_USER").expect("API_USER not set");
+        let api_key = env::var("API_KEY").expect("API_KEY not set");
+        let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let balance: Balance = remittance.get_account_balance_in_specific_currency("EUR".to_string()).await.unwrap();
+        println!("{:?}", balance);
+    }
+
 }
