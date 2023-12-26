@@ -5,7 +5,7 @@ use crate::structs::party::Party;
 
 
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct InvoiceRequest {
     #[serde(rename = "externalId")]
     pub external_id: String,
@@ -17,6 +17,22 @@ pub struct InvoiceRequest {
     pub intended_payer: Party,
     pub payee: Party,
     pub description: String,
+}
+
+impl InvoiceRequest {
+    pub fn new(amount: String, currency: String, validity_duration: String, intended_payer: Party, payee: Party, description: String) -> Self {
+        let external_id = uuid::Uuid::new_v4().to_string();
+        InvoiceRequest {
+            external_id,
+            amount,
+            currency,
+            validity_duration,
+            intended_payer,
+            payee,
+            description
+        }
+    }
+    
 }
 
 

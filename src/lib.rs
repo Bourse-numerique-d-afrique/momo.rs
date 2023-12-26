@@ -37,6 +37,9 @@ impl Momo {
         let provisioning = Provisioning::new(url.clone());
         let _create_sandbox = provisioning.create_sandox(&api_user).await?;
         let api = provisioning.create_api_information(&api_user).await?;
+        // create sql lite databases files  if they don't exist
+
+        
        Ok(
             Momo{
                 url,

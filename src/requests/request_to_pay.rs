@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 use crate::{structs::party::Party, enums::currency::Currency};
 
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RequestToPay {
     pub amount : String, // Amount that will be debited from the payer account.
     pub currency : Currency, // ISO4217 Currency
@@ -23,6 +23,24 @@ pub struct RequestToPay {
     #[serde(rename = "payeeNote")]
     pub payee_note : String // Message that will be written in the payee transaction history note field.
 
+}
+
+impl RequestToPay {
+
+    pub fn new(amount: String, currency: Currency, payer: Party, payer_message: String, payee_note: String) -> Self {
+        let external_id = uuid::Uuid::new_v4().to_string();
+        RequestToPay {
+            amount,
+            currency,
+            external_id,
+            payer,
+            payer_message,
+            payee_note
+        }
+    }
+    fn update_external_id(&mut self, external_id: String) {
+        self.external_id = external_id;
+    }
 }
 
 

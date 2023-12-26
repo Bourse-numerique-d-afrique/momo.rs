@@ -1,0 +1,24 @@
+name: Publish to crates.io
+
+on:
+  release:
+    types:
+      - created
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Set up Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+
+    - name: Build and publish
+      run: |
+        rustup install nightly
+        cargo login ${{ secrets.BNATOKEN }}
+        cargo publish --token ${{ secrets.BNATOKEN }}
+

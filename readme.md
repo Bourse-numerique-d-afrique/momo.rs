@@ -8,13 +8,13 @@
 ### Installation
 ```toml
 [dependencies]
-momo = "0.1.0"
+mtnmomo = "0.1.0"
 ```
 
 or you can use cargo add
 
 ```cli
-cargo add momo
+cargo add mtnmomo
 ```
 
 
@@ -22,7 +22,7 @@ cargo add momo
 ### Create a new instance of momo
 To create an instance of momo you need to have an api_user, url and environment (sandbox or production).
  ```rust
-    use momo::Momo;
+    use mtnmomo::Momo;
 
     fn main() -> () {
         let url = "https://sandbox.momodeveloper.mtn.com"; // the url of the api you are using for sandbox please use https://sandbox.momodeveloper.mtn.com
@@ -34,7 +34,7 @@ To create an instance of momo you need to have an api_user, url and environment 
 To create an instance of collection you need to have a primary_key and secondary_key of the collection product.
 You can get the primary_key and secondary_key from https://momodeveloper.mtn.com when you create a collection product.
  ```rust
-    use momo::Momo;
+    use mtnmomo::Momo;
 
     fn main() -> () {
         let url = "https://sandbox.momodeveloper.mtn.com"; // the url of the api you are using for sandbox please use https://sandbox.momodeveloper.mtn.com
@@ -51,7 +51,7 @@ You can get the primary_key and secondary_key from https://momodeveloper.mtn.com
 To create an instance of disbursement you need to have a primary_key and secondary_key of the disbursement product.
 You can get the primary_key and secondary_key from https://momodeveloper.mtn.com when you create a disbursement product.
  ```rust
-    use momo::Momo;
+    use mtnmomo::Momo;
 
     fn main() -> () {
         let url = "https://sandbox.momodeveloper.mtn.com"; // the url of the api you are using for sandbox please use https://sandbox.momodeveloper.mtn.com
@@ -67,7 +67,7 @@ You can get the primary_key and secondary_key from https://momodeveloper.mtn.com
 To create an instance of disbursement you need to have a primary_key and secondary_key of the remittance product.
 You can get the primary_key and secondary_key from https://momodeveloper.mtn.com when you create a remittance product.
  ```rust
-    use momo::Momo;
+    use mtnmomo::Momo;
 
     fn main() -> () {
         let url = "https://sandbox.momodeveloper.mtn.com"; // the url of the api you are using for sandbox please use https://sandbox.momodeveloper.mtn.com

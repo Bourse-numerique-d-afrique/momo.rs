@@ -20,5 +20,5 @@ pub trait MOMOAuthorization {
     This operation is used to claim a consent by the account holder for the requested scopes.
     @return BCAuthorizeResponse
      */
-    async fn bc_authorize(&self) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>>;
+    async fn bc_authorize(&self, msisdn: String) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>>;
 }

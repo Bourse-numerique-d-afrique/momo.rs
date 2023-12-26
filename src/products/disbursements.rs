@@ -9,6 +9,8 @@ use crate::{
     traits::{account::Account, auth::MOMOAuthorization},
 };
 use base64::{engine::general_purpose, Engine as _};
+use chrono::{Utc, DateTime, NaiveDateTime};
+use rusqlite::{params, Connection, Result};
 
 use crate::structs::balance::Balance;
 
@@ -29,6 +31,17 @@ impl Disbursements {
        @return Disbursements
     */
     pub fn new(url: String, environment: Environment, api_user: String, api_key: String, primary_key: String, secondary_key: String) -> Disbursements {
+        let conn = Connection::open("disbursement_access_tokens.db").unwrap();
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS access_tokens (
+                id INTEGER PRIMARY KEY,
+                access_token TEXT NOT NULL,
+                token_type TEXT NOT NULL,
+                expires_in INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )",
+            params![],
+        ).unwrap();
         Disbursements {
             url,
             primary_key,
@@ -39,6 +52,56 @@ impl Disbursements {
         }
     }
 
+        /*
+        This operation is used to insert an access token into the database
+        @return Ok(())
+     */
+    fn insert_access_token(&self, access_token: &str, token_type: &str, expires_in: i32) -> Result<(), Box<dyn std::error::Error>> {
+        let conn = Connection::open("disbursement_access_tokens.db")?;
+        conn.execute(
+            "INSERT INTO access_tokens (access_token, token_type, expires_in) VALUES (?1, ?2, ?3)",
+            params![access_token, token_type, expires_in],
+        )?;
+
+        Ok(())
+    }
+
+    /*
+        This operation is used to get the latest access token from the database
+        @return TokenResponse
+     */
+    async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
+        let conn = Connection::open("disbursement_access_tokens.db")?;
+        let mut stmt = conn.prepare("SELECT * FROM access_tokens ORDER BY created_at DESC LIMIT 1")?;
+        let access_result = stmt.query(params![]);
+        let mut access = access_result.unwrap();
+        let r = access.next().unwrap();
+        if r.is_some() {
+            println!("is some");
+            let row = r.unwrap();
+            let created_at: String = row.get(4)?;
+            let naive_datetime = NaiveDateTime::parse_from_str(&created_at, "%Y-%m-%d %H:%M:%S")?;
+            let date_time: DateTime<Utc> = DateTime::from_naive_utc_and_offset(naive_datetime, Utc);
+            let now = Utc::now();
+            let duration = now.signed_duration_since(date_time);
+            let duration = duration.num_seconds();
+            if duration > 3600 {
+                let token: TokenResponse = self.create_access_token().await?;
+                return Ok(token);
+            }else{
+                let token = TokenResponse{
+                    access_token: row.get(1)?,
+                    token_type: row.get(2)?,
+                    expires_in: row.get(3)?,
+                };
+                return Ok(token);
+            }
+        }else{
+            let token: TokenResponse = self.create_access_token().await?;
+            return Ok(token);
+        }
+    }
+
     /*
        deposit operation is used to deposit an amount from the owner’s account to a payee account.
        Status of the transaction can be validated by using the GET /deposit/{referenceId}
@@ -46,12 +109,13 @@ impl Disbursements {
     */
     pub async fn deposit_v1(&self) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client
             .post(format!(
                 "{}/disbursement/v1_0/deposit",
                 self.url
             ))
-            .header("Authorization", format!("Basic {}", ""))
+            .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
             .header("X-Reference-Id", "value")
             .header("Cache-Control", "no-cache")
@@ -77,12 +141,13 @@ impl Disbursements {
     */
     pub async fn deposit_v2(&self) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client
             .post(format!(
                 "{}/disbursement/v2_0/deposit",
                 self.url
             ))
-            .header("Authorization", format!("Basic {}", ""))
+            .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
             .header("X-Reference-Id", "value")
             .header("Cache-Control", "no-cache")
@@ -107,12 +172,13 @@ impl Disbursements {
     */
     pub async fn get_deposit_status(&self) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client
             .post(format!(
                 "{}/disbursement/v1_0/deposit/{}",
                 self.url, "referenceId"
             ))
-            .header("Authorization", format!("Basic {}", ""))
+            .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
             .header("Cache-Control", "no-cache")
             .send()
@@ -128,14 +194,15 @@ impl Disbursements {
 
        @return Ok(())
     */
-    pub async fn get_refund_status(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn get_refund_status(&self, reference_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client
             .post(format!(
                 "{}/disbursement/v1_0/refund/{}",
-                self.url, "referenceId"
+                self.url, reference_id
             ))
-            .header("Authorization", format!("Basic {}", ""))
+            .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
             .header("Cache-Control", "no-cache")
             .send()
@@ -151,12 +218,13 @@ impl Disbursements {
     */
     pub async fn get_transfer_status(&self) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client
             .post(format!(
                 "{}/disbursement/v1_0/transfer/{}",
                 self.url, "referenceId"
             ))
-            .header("Authorization", format!("Basic {}", ""))
+            .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
             .header("Cache-Control", "no-cache")
             .send()
@@ -171,25 +239,19 @@ impl Disbursements {
        Status of the transaction can be validated by using the GET /refund/{referenceId}
        @return Ok(())
     */
-    pub async fn refund_v1(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn refund_v1(&self, refund: Refund) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client
             .post(format!(
                 "{}/disbursement/v1_0/refund",
                 self.url
             ))
-            .header("Authorization", format!("Basic {}", ""))
+            .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
             .header("X-Reference-Id", "")
             .header("Cache-Control", "no-cache")
-            .body(Refund {
-                amount: todo!(),
-                currency: todo!(),
-                external_id: todo!(),
-                payer_message: todo!(),
-                payee_note: todo!(),
-                reference_id_to_refund: todo!(),
-            })
+            .body(refund)
             .send()
             .await?;
 
@@ -202,25 +264,19 @@ impl Disbursements {
        Status of the transaction can be validated by using the GET /refund/{referenceId}
        @return Ok(())
     */
-    pub async fn refund_v2(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn refund_v2(&self, refund: Refund) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client
             .post(format!(
                 "{}/disbursement/v2_0/refund",
                 self.url
             ))
-            .header("Authorization", format!("Basic {}", ""))
+            .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
             .header("X-Reference-Id", "")
             .header("Cache-Control", "no-cache")
-            .body(Refund {
-                amount: todo!(),
-                currency: todo!(),
-                external_id: todo!(),
-                payer_message: todo!(),
-                payee_note: todo!(),
-                reference_id_to_refund: todo!(),
-            })
+            .body(refund)
             .send()
             .await?;
 
@@ -233,25 +289,19 @@ impl Disbursements {
        Status of the transaction can be validated by using the GET /transfer/{referenceId}
        @return Ok(())
     */
-    pub async fn transfer(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn transfer(&self, transfer: Transfer) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client
             .post(format!(
                 "{}/disbursement/v1_0/transfer",
                 self.url
             ))
-            .header("Authorization", format!("Basic {}", ""))
+            .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
             .header("X-Reference-Id", "")
             .header("Cache-Control", "no-cache")
-            .body(Transfer {
-                amount: todo!(),
-                currency: todo!(),
-                external_id: todo!(),
-                payee: todo!(),
-                payer_message: todo!(),
-                payee_note: todo!(),
-            })
+            .body(transfer)
             .send()
             .await?;
 
@@ -302,7 +352,7 @@ impl Account for Disbursements {
     }
 
     async fn get_basic_user_info(
-        &self,
+        &self, account_holder_msisdn: &str
     ) -> Result<BasicUserInfoJsonResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let res = client
@@ -343,7 +393,7 @@ impl Account for Disbursements {
 
     async fn validate_account_holder_status(
         &self,
-        account_holder_id: String,
+        account_holder_id: &str, account_holder_type: &str
     ) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let res = client
@@ -403,7 +453,7 @@ impl MOMOAuthorization for Disbursements {
         Ok(token_response)
     }
 
-    async fn bc_authorize(&self) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
+    async fn bc_authorize(&self, msisdn: String) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
         let authorization = self.encode(&self.primary_key, &self.secondary_key);
         let client = reqwest::Client::new();
         let res = client

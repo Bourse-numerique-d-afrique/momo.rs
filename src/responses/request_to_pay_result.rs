@@ -19,5 +19,4 @@ pub struct RequestToPayResult {
     #[serde(rename = "payeeNote")]
     pub payee_note: String,
     pub status: String,
-    pub reason: ErrorReason,
 }

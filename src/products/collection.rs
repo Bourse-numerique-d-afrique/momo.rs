@@ -9,13 +9,13 @@ use crate::{traits::{account::Account, auth::MOMOAuthorization},
          create_payment::CreatePayment,
           request_to_pay::RequestToPay,
            pre_approval::PreApproval,
-            delivery_notification::DeliveryNotification},
-             enums::environment::Environment};
+            delivery_notification::DeliveryNotification, bc_authorize::BcAuthorize, access_token::AccessTokenRequest},
+             enums::{environment::Environment, access_type::AccessType}};
 use base64::{engine::general_purpose, Engine as _};
 
-use crate::structs::{balance::Balance, party::Party};
+use crate::structs::balance::Balance;
 use rusqlite::{params, Connection, Result};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, NaiveDateTime};
 
 
 
@@ -37,6 +37,17 @@ impl Collection {
     
      */
     pub fn new(url: String, environment: Environment, api_user: String, api_key: String, primary_key: String, secondary_key: String) -> Collection {
+        let conn = Connection::open("collection_access_tokens.db").unwrap();
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS access_tokens (
+                id INTEGER PRIMARY KEY,
+                access_token TEXT NOT NULL,
+                token_type TEXT NOT NULL,
+                expires_in INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )",
+            params![],
+        ).unwrap();
         Collection {
             url,
             primary_key,
@@ -49,37 +60,17 @@ impl Collection {
 
 
     /*
-        create collection access tokens if they do not exist in the database    
-        @return Ok(())
-    */
-    fn create_access_tokens_if_not_exists(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let conn = Connection::open("mtn_access_tokens.db")?;
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS access_tokens (
-                id INTEGER PRIMARY KEY,
-                access_token TEXT NOT NULL,
-                token_type TEXT NOT NULL,
-                expires_in INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )",
-            params![],
-        )?;
-
-        Ok(())
-    }
-
-
-    /*
         This operation is used to insert an access token into the database
         @return Ok(())
      */
     fn insert_access_token(&self, access_token: &str, token_type: &str, expires_in: i32) -> Result<(), Box<dyn std::error::Error>> {
-        let conn = Connection::open("mtn_access_tokens.db")?;
-        conn.execute(
+        let conn = Connection::open("collection_access_tokens.db")?;
+        conn.execute( 
             "INSERT INTO access_tokens (access_token, token_type, expires_in) VALUES (?1, ?2, ?3)",
             params![access_token, token_type, expires_in],
         )?;
 
+        conn.busy_timeout(std::time::Duration::from_secs(10))?;
         Ok(())
     }
 
@@ -87,27 +78,37 @@ impl Collection {
         This operation is used to get the latest access token from the database
         @return TokenResponse
      */
-    fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
-        let conn = Connection::open("mtn_access_tokens.db")?;
+    async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
+        let conn = Connection::open("collection_access_tokens.db")?;
+        conn.busy_timeout(std::time::Duration::from_secs(10))?;
         let mut stmt = conn.prepare("SELECT * FROM access_tokens ORDER BY created_at DESC LIMIT 1")?;
-        let access_token_iter = stmt.query_map(params![], |row| {
+        let access_result = stmt.query(params![]);
+        let mut access = access_result.unwrap();
+        let r = access.next().unwrap();
+        if r.is_some() {
+            let row = r.unwrap();
             let created_at: String = row.get(4)?;
-            let created_at = created_at.parse::<DateTime<Utc>>().map_err(|_| rusqlite::Error::QueryReturnedNoRows)?;
+            let naive_datetime = NaiveDateTime::parse_from_str(&created_at, "%Y-%m-%d %H:%M:%S")?;
+            let date_time: DateTime<Utc> = DateTime::from_naive_utc_and_offset(naive_datetime, Utc);
             let now = Utc::now();
-            let duration = now.signed_duration_since(created_at);
+            let duration = now.signed_duration_since(date_time);
             let duration = duration.num_seconds();
             if duration > 3600 {
-                return Err(rusqlite::Error::QueryReturnedNoRows);
+                let token: TokenResponse = self.create_access_token().await?;
+                return Ok(token);
+            }else{
+                let token = TokenResponse{
+                    access_token: row.get(1)?,
+                    token_type: row.get(2)?,
+                    expires_in: row.get(3)?,
+                };
+                return Ok(token);
             }
-            Ok(TokenResponse {
-                access_token: row.get(1)?,
-                token_type: row.get(2)?,
-                expires_in: row.get(3)?,
-            })
-        })?;
-
-        let access_token = access_token_iter.map(|x| x.unwrap()).collect::<Vec<TokenResponse>>();
-        Ok(access_token[0].clone())
+        }else{
+            let token: TokenResponse = self.create_access_token().await?;
+            return Ok(token);
+        }
+        
     }
 
 
@@ -117,19 +118,26 @@ impl Collection {
         @return InvoiceDelete
     
      */
-    pub async fn cancel_invoice(&self, external_id: &str, access_token: &str) -> Result<InvoiceDelete, Box<dyn std::error::Error>> {
+    pub async fn cancel_invoice(&self, invoice_id: &str, callback_url: Option<&str>) -> Result<InvoiceDelete, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let res = client.delete(format!("{}/collection/v2_0/invoice/{}", self.url, "invoice_id"))
-        .header("Authorization", format!("Basic {}", ""))
+        let access_token = self.get_valid_access_token().await?;
+        let res = client.delete(format!("{}/collection/v2_0/invoice/{}", self.url, invoice_id))
+        .bearer_auth(access_token.access_token)
+        .header("Content-Type", "application/json")
         .header("X-Target-Environment", self.environment.to_string())
-        .header("X-Reference-Id", "")
-        .header("X-Callback-Url", "")
+        .header("X-Reference-Id", invoice_id)
+        .header("X-Callback-Url", callback_url.unwrap_or(""))
         .header("Cache-Control", "no-cache")
-        .body(InvoiceDelete{external_id: "external_id".to_string()})
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .body(InvoiceDelete{external_id: invoice_id.to_string()})
         .send().await?;
-        let body = res.text().await?;
-        let response: InvoiceDelete = serde_json::from_str(&body)?;
-        Ok(response)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let response: InvoiceDelete = serde_json::from_str(&body)?;
+            Ok(response)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     /*
@@ -137,35 +145,31 @@ impl Collection {
         @return Ok(())
     
      */
-    pub async fn create_invoice(&self, external_id: &str, access_token: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn create_invoice(&self, invoice: InvoiceRequest, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/collection/v2_0/invoice", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        .bearer_auth(access_token.access_token)
+        .header("Content-Type", "application/json")
         .header("X-Target-Environment", self.environment.to_string())
-        .header("X-Reference-Id", "")
-        .header("X-Callback-Url", "")
+        .header("X-Reference-Id", &invoice.external_id)
+        .header("X-Callback-Url", callback_url.unwrap_or(""))
         .header("Cache-Control", "no-cache")
-        .body(
-            InvoiceRequest {
-                amount: "amount".to_string(),
-                currency: "currency".to_string(),
-                external_id: "external_id".to_string(),
-                validity_duration: "validity_duration".to_string(),
-                description: "description".to_string(),
-                intended_payer: Party {
-                    party_id_type: todo!(),
-                    party_id: todo!(),
-                },
-                payee: Party {
-                    party_id_type: todo!(),
-                    party_id: todo!(),
-                },
-            }
-        )
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .body(invoice.clone())
         .send().await?;
 
-        let response = res.text().await?;
-        Ok(())
+        
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let invoice: InvoiceRequest = serde_json::from_str(&body)?;
+            Ok(invoice.external_id)
+        }else {
+            let res_clone = res.text().await?;
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res_clone)))
+        }
+
+
     }
 
 
@@ -173,33 +177,26 @@ impl Collection {
         Making it possible to perform payments via the partner gateway. This may be used to pay for external bills or to perform air-time top-ups.
         @return Ok(())
      */
-    pub async fn create_payments(&self, external_id: &str, access_token: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn create_payments(&self, payment: CreatePayment, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/collection/v2_0/payment", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
-        .header("X-Reference-Id", "")
-        .header("X-Callback-Url", "")
+        .header("X-Reference-Id", &payment.external_transaction_id)
+        .header("X-Callback-Url", callback_url.unwrap_or(""))
         .header("Cache-Control", "no-cache")
-        .body(CreatePayment{
-            external_transaction_id: todo!(),
-            money: todo!(),
-            customer_reference: todo!(),
-            service_provider_user_name: todo!(),
-            coupon_id: todo!(),
-            product_id: todo!(),
-            product_offering_id: todo!(),
-            receiver_message: todo!(),
-            sender_note: todo!(),
-            max_number_of_retries: todo!(),
-            include_sender_charges: todo!(),
-        })
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .body(payment.clone())
         .send().await?;
 
-        let response = res.text().await?;
-
-        
-        Ok(())
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let payment: CreatePayment = serde_json::from_str(&body)?;
+            Ok(payment.external_transaction_id)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
 
@@ -207,17 +204,24 @@ impl Collection {
         This operation is used to get the status of an invoice. X-Reference-Id that was passed in the post is used as reference to the request
         @return InvoiceResult
      */
-    async fn get_invoice_status(&self, invoice_id: String, external_id: &str, access_token: &str) -> Result<InvoiceResult, Box<dyn std::error::Error>> {
+    async fn get_invoice_status(&self, invoice_id: String) -> Result<InvoiceResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client.get(format!("{}/collection/v2_0/invoice/{}", self.url, invoice_id))
-        .header("Authorization", format!("Basic {}", ""))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
         .header("Cache-Control", "no-cache")
         .send().await?;
 
-        let body = res.text().await?;
-        let invoice_status: InvoiceResult = serde_json::from_str(&body)?;
-        Ok(invoice_status)
+
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let invoice_status: InvoiceResult = serde_json::from_str(&body)?;
+            Ok(invoice_status)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
 
@@ -225,34 +229,46 @@ impl Collection {
         This operation is used to get the status of a Payment. X-Reference-Id that was passed in the post is used as reference to the request
         @return PaymentResult
      */
-    async fn get_payment_status(&self, payment_id: String, external_id: &str, access_token: &str) -> Result<PaymentResult, Box<dyn std::error::Error>> {
+    async fn get_payment_status(&self, payment_id: String) -> Result<PaymentResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client.get(format!("{}/collection/v2_0/payment/{}", self.url, payment_id))
-        .header("Authorization", format!("Basic {}", ""))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Cache-Control", "no-cache")
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
         .send().await?;
 
-        let body = res.text().await?;
-        let payment_status: PaymentResult = serde_json::from_str(&body)?;
-        Ok(payment_status)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let payment_status: PaymentResult = serde_json::from_str(&body)?;
+            Ok(payment_status)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
 
     /*
     This operation is used to get the status of a pre-approval. X-Reference-Id that was passed in the post is used as reference to the request.
      */
-    async fn get_pre_approval_status(&self, pre_approval_id: String, external_id: &str, access_token: &str) -> Result<PreApprovalResult, Box<dyn std::error::Error>> {
+    async fn get_pre_approval_status(&self, pre_approval_id: String) -> Result<PreApprovalResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client.get(format!("{}/collection/v2_0/preapproval/{}", self.url, pre_approval_id))
-        .header("Authorization", format!("Basic {}", ""))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Cache-Control", "no-cache")
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
         .send().await?;
 
-        let body = res.text().await?;
-        let pre_approval_status: PreApprovalResult = serde_json::from_str(&body)?;
-        Ok(pre_approval_status)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let pre_approval_status: PreApprovalResult = serde_json::from_str(&body)?;
+            Ok(pre_approval_status)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
 
@@ -260,23 +276,25 @@ impl Collection {
         Preapproval operation is used to create a pre-approval.
         @return Ok(())
      */
-    pub async fn pre_approval(&self, external_id: &str, access_token: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn pre_approval(&self, preaproval: PreApproval) -> Result<String, Box<dyn std::error::Error>> {
+        let external_id = uuid::Uuid::new_v4().to_string();
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/collection/v2_0/preapproval", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Cache-Control", "no-cache")
-        .body(PreApproval{
-            payer: todo!(),
-            payer_currency: todo!(),
-            payer_message: todo!(),
-            validity_time: todo!(),
-        })
+        .header("Content-Type", "application/json")
+        .header("X-Reference-Id", &external_id)
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .body(preaproval)
         .send().await?;
 
-        
-        let response = res.text().await?;
-        Ok(())
+        if res.status().is_success() {
+            Ok(external_id)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     /*
@@ -285,24 +303,24 @@ impl Collection {
         The requesttopay will be in status PENDING until the transaction is authorized or declined by the payer or it is timed out by the system.
         Status of the transaction can be validated by using the GET /requesttopay/<resourceId>
         @param request
-        @param external_id
         @param access_token access token obtained from the create_access_token method
         @return Ok(())
      */
-    pub async fn request_to_pay(&self, request: RequestToPay, external_id: &str, access_token: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn request_to_pay(&self, request: RequestToPay) -> Result<String, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/collection/v1_0/requesttopay", self.url))
-        .bearer_auth(access_token)
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Cache-Control", "no-cache")
         .header("Content-Type", "application/json")
-        .header("X-Reference-Id", external_id)
+        .header("X-Reference-Id", &request.external_id)
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-        .body(request)
+        .body(request.clone())
         .send().await?;
 
         if res.status().is_success() {
-            Ok(())
+            Ok(request.clone().external_id.clone())
         } else {
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
         }
@@ -313,41 +331,47 @@ impl Collection {
         This operation is used to send additional Notification to an End User.
         @return Ok(())
      */
-    pub async fn request_to_pay_delivery_notification(&self, external_id: &str, access_token: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn request_to_pay_delivery_notification(&self, external_id: &str, notification: DeliveryNotification) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let res = client.post(format!("{}/collection/v1_0/requesttopay/{}/deliverynotification", self.url, ""))
-        .header("Authorization", format!("Basic {}", ""))
+        let access_token = self.get_valid_access_token().await?;
+        let res = client.post(format!("{}/collection/v1_0/requesttopay/{}/deliverynotification", self.url, external_id))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
-        .header("notificationMessage", "")
+        .header("notificationMessage", &notification.notification_message)
         .header("Language", "")
         .header("Cache-Control", "no-cache")
-        .body(
-            DeliveryNotification{
-                notification_message: todo!(),
-            }
-        )
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .body(notification)
         .send().await?;
 
-        let response = res.text().await?;
-        Ok(())
+        if res.status().is_success() {
+            Ok(())
+        } else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     /*
         This operation is used to get the status of a request to pay.
         X-Reference-Id that was passed in the post is used as reference to the request.
      */
-    pub async fn request_to_pay_transaction_status(&self, external_id: &str, access_token: &str) -> Result<RequestToPayResult, Box<dyn std::error::Error>> {
+    pub async fn request_to_pay_transaction_status(&self, payment_id: &str) -> Result<RequestToPayResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let res = client.get(format!("{}/collection/v1_0/requesttopay/{}", self.url, "payment_id"))
-        .header("Authorization", format!("Basic {}", ""))
+        let access_token = self.get_valid_access_token().await?;
+        let res = client.get(format!("{}/collection/v1_0/requesttopay/{}", self.url, payment_id))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Cache-Control", "no-cache")
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
         .send().await?;
 
-        let response = res.text().await?;
-        let request_to_pay_result: RequestToPayResult = serde_json::from_str(&response)?;
-
-        Ok(request_to_pay_result)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let request_to_pay_result: RequestToPayResult = serde_json::from_str(&body)?;
+            Ok(request_to_pay_result)
+        } else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
 
@@ -355,18 +379,23 @@ impl Collection {
         This operation is used to get the status of a request to withdraw.
         X-Reference-Id that was passed in the post is used as reference to the request.
      */
-    pub async fn request_to_withdraw_transaction_status(&self, external_id: &str, access_token: &str) -> Result<RequestToPayResult, Box<dyn std::error::Error>> {
+    pub async fn request_to_withdraw_transaction_status(&self, payment_id: &str) -> Result<RequestToPayResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let res = client.get(format!("{}/collection/v1_0/requesttowithdraw/{}", self.url, "payment_id"))
-        .header("Authorization", format!("Basic {}", ""))
+        let access_token = self.get_valid_access_token().await?;
+        let res = client.get(format!("{}/collection/v1_0/requesttowithdraw/{}", self.url, payment_id))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Cache-Control", "no-cache")
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
         .send().await?;
 
-        let response = res.text().await?;
-        let request_to_pay_result: RequestToPayResult = serde_json::from_str(&response)?;
-
-        Ok(request_to_pay_result)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let request_to_pay_result: RequestToPayResult = serde_json::from_str(&body)?;
+            Ok(request_to_pay_result)
+        } else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     /*
@@ -376,27 +405,23 @@ impl Collection {
 
     @return Ok(())
      */
-    pub async fn request_to_withdraw_v1(&self, external_id: &str, access_token: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn request_to_withdraw_v1(&self, request: RequestToPay, callback_url: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/collection/v1_0/requesttowithdraw", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
-        .header("X-Callback-Url", "")
+        .header("X-Callback-Url", callback_url.unwrap_or(""))
         .header("Cache-Control", "no-cache")
-        .body(
-            RequestToPay{
-                amount: todo!(),
-                currency: todo!(),
-                external_id: todo!(),
-                payer: todo!(),
-                payer_message: todo!(),
-                payee_note: todo!(),
-            }
-        )
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .body(request)
         .send().await?;
 
-        let response = res.text().await?;
-        Ok(())
+        if res.status().is_success() {
+            Ok(())
+        } else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     /*
@@ -407,88 +432,119 @@ impl Collection {
     @return Ok(())
     
      */
-    pub async fn request_to_withdraw_v2(&self, external_id: &str, access_token: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn request_to_withdraw_v2(&self, request: RequestToPay, callback_url: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/collection/v2_0/requesttowithdraw", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
-        .header("X-Callback-Url", "")
+        .header("X-Callback-Url", callback_url.unwrap_or("")) 
         .header("Cache-Control", "no-cache")
-        .body(
-            RequestToPay{
-                amount: todo!(),
-                currency: todo!(),
-                external_id: todo!(),
-                payer: todo!(),
-                payer_message: todo!(),
-                payee_note: todo!(),
-            }
-        )
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .body(request)
         .send().await?;
 
-        let response = res.text().await?;
-        Ok(())
+        if res.status().is_success() {
+            Ok(())
+        } else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 }
 
 
 impl Account for Collection{
-    async fn get_account_balance(&self, external_id: &str, access_token: &str) -> Result<Balance, Box<dyn std::error::Error>> {
+    async fn get_account_balance(&self) -> Result<Balance, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client.get(format!("{}/collection/v1_0/account/balance", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
-        .header("Cache-Control", "no-cache").send().await?;
+        .header("Cache-Control", "no-cache")
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .send().await?;
 
-        let body = res.text().await?;
-        let balance: Balance = serde_json::from_str(&body)?;
-        Ok(balance)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let balance: Balance = serde_json::from_str(&body)?;
+            Ok(balance)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
 
     }
 
-    async fn get_account_balance_in_specific_currency(&self, currency: String, external_id: &str, access_token: &str) -> Result<Balance, Box<dyn std::error::Error>> {
+    async fn get_account_balance_in_specific_currency(&self, currency: String) -> Result<Balance, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let res = client.get(format!("{}/collection/v1_0/account/balance/currency", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        let access_token = self.get_valid_access_token().await?;
+        let res = client.get(format!("{}/collection/v1_0/account/balance/{}", self.url, currency))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
         .header("Cache-Control", "no-cache").send().await?;
-        let body = res.text().await?;
-        let balance: Balance = serde_json::from_str(&body)?;
-        Ok(balance)
+
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let balance: Balance = serde_json::from_str(&body)?;
+            Ok(balance)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
-    async fn get_basic_user_info(&self, external_id: &str, access_token: &str) -> Result<BasicUserInfoJsonResponse, Box<dyn std::error::Error>> {
+    async fn get_basic_user_info(&self, account_holder_msisdn: &str) -> Result<BasicUserInfoJsonResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let res = client.get(format!("{}/collection/v1_0/accountholder/msisdn/{}/basicuserinfo", self.url, "accountHolderMSISDN"))
-        .header("Authorization", format!("Basic {}", ""))
+        let access_token = self.get_valid_access_token().await?;
+        let res = client.get(format!("{}/collection/v1_0/accountholder/msisdn/{}/basicuserinfo", self.url, account_holder_msisdn))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
         .header("Cache-Control", "no-cache").send().await?;
-        let body = res.text().await?;
-        let basic_user_info: BasicUserInfoJsonResponse = serde_json::from_str(&body)?;
-        Ok(basic_user_info)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let basic_user_info: BasicUserInfoJsonResponse = serde_json::from_str(&body)?;
+            Ok(basic_user_info)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
-    async fn get_user_info_with_consent(&self, external_id: &str, access_token: &str) -> Result<UserInfoWithConsent, Box<dyn std::error::Error>> {
+    async fn get_user_info_with_consent(&self) -> Result<UserInfoWithConsent, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client.get(format!("{}/collection/oauth2/v1_0/userinfo", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
         .header("Cache-Control", "no-cache").send().await?;
-        let body = res.text().await?;
-        let basic_user_info: UserInfoWithConsent = serde_json::from_str(&body)?;
-        Ok(basic_user_info)
+
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let basic_user_info: UserInfoWithConsent = serde_json::from_str(&body)?;
+            Ok(basic_user_info)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
+
 
     }
 
-    async fn validate_account_holder_status(&self, account_holder_id: String, external_id: &str, access_token: &str) -> Result<(), Box<dyn std::error::Error>> {
+    async fn validate_account_holder_status(&self, account_holder_id: &str, account_holder_type: &str) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client.get(format!("{}/collection/v1_0/accountholder/msisdn/{}/basicuserinfo", self.url, "accountHolderMSISDN"))
-        .header("Authorization", format!("Basic {}", ""))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
         .header("Cache-Control", "no-cache").send().await?;
-        let body = res.text().await?;
-        let basic_user_info: BasicUserInfoJsonResponse = serde_json::from_str(&body)?;
-        Ok(())
+
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let basic_user_info: BasicUserInfoJsonResponse = serde_json::from_str(&body)?;
+            Ok(())
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
 
 
     }
@@ -509,42 +565,61 @@ impl MOMOAuthorization for Collection {
 
         let body = res.text().await?;
         let token_response: TokenResponse = serde_json::from_str(&body)?;
+        self.insert_access_token(&token_response.access_token, &token_response.token_type, token_response.expires_in)?;
         Ok(token_response)
     }
 
-    async fn create_o_auth_2_token(&self, access_token: &str) -> Result<OAuth2TokenResponse, Box<dyn std::error::Error>> {
-        let authorization = self.encode(&self.primary_key, &self.secondary_key);
+
+    /* 
+        This operation is used to create an OAuth2 token.
+        @return OAuth2TokenResponse
+    
+    */
+    async fn create_o_auth_2_token(&self) -> Result<OAuth2TokenResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let res = client.post(format!("{}/collection/oauth2/token/", self.url))
-        .bearer_auth(authorization)
+        let res: reqwest::Response = client.post(format!("{}/collection/oauth2/token/", self.url))
+        .basic_auth(self.api_user.to_string(), Some(self.api_key.to_string()))
         .header("X-Target-Environment", self.environment.to_string())
         .header("Content-type", "application/x-www-form-urlencoded")
         .header("Cache-Control", "no-cache")
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-        .body("")
+        .body(AccessTokenRequest{grant_type: "urn:openid:params:grant-type:ciba".to_string(), auth_req_id: "auth_req_id".to_string()})
         .send().await?;
 
-        let body = res.text().await?;
-        let token_response: OAuth2TokenResponse = serde_json::from_str(&body)?;
-        Ok(token_response)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let token_response: OAuth2TokenResponse = serde_json::from_str(&body)?;
+            Ok(token_response)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
-    async fn bc_authorize(&self, access_token: &str) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
-        let authorization = self.encode(&self.primary_key, &self.secondary_key);
+    /*
+        This operation is used to authorize a payment request.
+        @param msisdn The MSISDN of the user
+        @return BCAuthorizeResponse
+    
+     */
+    async fn bc_authorize(&self, msisdn: String) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let res = client.post(format!("{}/collection/v1_0/bc-authorize", self.url))
         .basic_auth(self.api_user.to_string(), Some(self.api_key.to_string()))
         .header("X-Target-Environment", self.environment.to_string())
-        .header("X-Callback-Url", "callback")
+        .header("X-Callback-Url", "")
         .header("Content-type", "application/x-www-form-urlencoded")
-        .header("Content-Length", "0")
         .header("Cache-Control", "no-cache")
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .body(BcAuthorize{login_hint: format!("ID:{}/MSISDN", msisdn), scope: "profile".to_string(), access_type: AccessType::Offline}) // scope can be profile
         .send().await?;
 
-
-        let body: String = res.text().await?;
-        let token_response: BCAuthorizeResponse = serde_json::from_str(&body)?;
-        Ok(token_response)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let token_response: BCAuthorizeResponse = serde_json::from_str(&body)?;
+            Ok(token_response)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     fn encode(&self, user_id: &str, user_api_key: &str) -> String {
@@ -567,16 +642,30 @@ mod tests {
     use dotenv::dotenv;
     use std::env;
 
+
     #[tokio::test]
-    async fn test_create_token() {
+    async fn test_create_and_cancel_invoice(){
         dotenv().ok();
         let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
         let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
         let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
-        let collection = Collection::new(mtn_url, Environment::Sandbox, "33e32162-3ca5-43fa-a21c-db44d0c704f4".to_string(), "a56bed3d90b440409a838adc39049d51".to_string(), primary_key, secondary_key);
-        let token: TokenResponse = collection.create_access_token().await.expect("Error creating token");
-        assert!(token.access_token.len() > 0);
-
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        
+        let payer : Party = Party {
+            party_id_type: "MSISDN".to_string(),
+            party_id: "+242064818006".to_string(),
+        };
+        let payee : Party = Party {
+            party_id_type: "MSISDN".to_string(),
+            party_id: "+242074818007".to_string(),
+        };
+        let invoice = InvoiceRequest::new("100".to_string(), Currency::EUR.to_string(), "3600".to_string(), payer, payee, "test invoice".to_string());
+        let invoice_id = collection.create_invoice(invoice, None).await.expect("Error creating invoice");
+        let res: InvoiceDelete = collection.cancel_invoice(&invoice_id, None).await.expect("Error cancelling invoice");
+        assert_eq!(res.external_id, invoice_id);
     }
 
     #[tokio::test]
@@ -586,28 +675,345 @@ mod tests {
 
         let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
         let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
-        let collection = Collection::new(mtn_url, Environment::Sandbox, "33e32162-3ca5-43fa-a21c-db44d0c704f4".to_string(), "a56bed3d90b440409a838adc39049d51".to_string(), primary_key, secondary_key);
-        let external = uuid::Uuid::new_v4().to_string();
-        let token: TokenResponse = collection.create_access_token().await.expect("Error creating token");
-        assert!(token.access_token.len() > 0);
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
         
+        let payer : Party = Party {
+            party_id_type: "MSISDN".to_string(),
+            party_id: "+242064818006".to_string(),
+        };
+        let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
+        let res = collection.request_to_pay(request).await.expect("Error requesting payment");
+
+        assert_ne!(res.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_request_payment_status(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
         
+        let payer : Party = Party {
+            party_id_type: "MSISDN".to_string(),
+            party_id: "+242064818006".to_string(),
+        };
+        let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
+        let res = collection.request_to_pay(request).await.expect("Error requesting payment");
 
-        let res = collection.request_to_pay(RequestToPay{
-            amount: "100".to_string(),
-            currency: Currency::EUR, // The currency used in Sandbox is EUR
-            external_id: external.clone(),
-            payer: Party {
-                party_id_type: "MSISDN".to_string(),
-                party_id: "+242064818006".to_string(),
-            },
-            payer_message: "test_payer_message".to_string(),
-            payee_note: "test_payee_note".to_string(),
-        }, &external, &token.access_token).await.expect("Error requesting payment");
+        assert_ne!(res.len(), 0);
 
-        assert_eq!(res, ());
+        let status = collection.request_to_pay_transaction_status(&res).await.expect("Error getting payment status");
+        assert_eq!(status.status, "SUCCESSFUL");
+    }
+
+    #[tokio::test]
+    async fn test_request_payment_with_delivery_notification(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        
+        let payer : Party = Party {
+            party_id_type: "MSISDN".to_string(),
+            party_id: "+242064818006".to_string(),
+        };
+        let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
+        let res = collection.request_to_pay(request).await.expect("Error requesting payment");
+
+        assert_ne!(res.len(), 0);
+
+        let notifcation_result = collection.request_to_pay_delivery_notification(&res, DeliveryNotification{notification_message: "test_notification_message".to_string()}).await;
+        assert!(notifcation_result.is_ok());
 
     }
+
+    #[tokio::test]
+    async fn test_create_o_auth_2_token(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let res = collection.create_o_auth_2_token().await.expect("Error creating o auth 2 token");
+        assert_ne!(res.access_token.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_bc_authorize(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let res = collection.bc_authorize("+242064818006".to_string()).await.expect("Error authorizing");
+        assert_ne!(res.auth_req_id.len(), 0);
+    }
+
+
+    #[tokio::test]
+    async fn test_get_account_balance(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let res = collection.get_account_balance().await.expect("Error getting account balance");
+        assert_ne!(res.available_balance.len(), 0);
+    }
+
+
+    #[tokio::test]
+    async fn test_get_account_balance_in_specific_currency() {
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let res = collection.get_account_balance_in_specific_currency(Currency::XAF.to_string()).await.expect("Error getting account balance");
+        assert_ne!(res.available_balance.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_basic_user_info(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let res = collection.get_basic_user_info("+242064818006").await.expect("Error getting basic user info");
+        assert_ne!(res.given_name.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_user_info_with_consent(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let res = collection.get_user_info_with_consent().await.expect("Error getting user info with consent");
+        assert_ne!(res.sub.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_invoice_status(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let res = collection.get_invoice_status("invoice_id".to_string()).await.expect("Error getting invoice status");
+        assert_ne!(res.status.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_payment_status(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let res = collection.get_payment_status("payment_id".to_string()).await.expect("Error getting payment status");
+        assert_ne!(res.status.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_pre_approval(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+
+        let user : Party = Party {
+            party_id_type: "MSISDN".to_string(),
+            party_id: "+242064818006".to_string(),
+        };
+        let preapproval = PreApproval { payer: user, payer_currency: Currency::EUR.to_string(), payer_message: "".to_string(), validity_time: 3600};
+        let res = collection.pre_approval(preapproval).await.expect("Error creating pre approval");
+        assert_ne!(res.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_pre_approval_status(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let res = collection.get_pre_approval_status("pre_approval_id".to_string()).await.expect("Error getting pre approval status");
+        assert_ne!(res.status.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_create_payment(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+
+        let payer : Party = Party {
+            party_id_type: "MSISDN".to_string(),
+            party_id: "+242064818006".to_string(),
+        };
+        let payee : Party = Party {
+            party_id_type: "MSISDN".to_string(),
+            party_id: "+242074818007".to_string(),
+        };
+        let payment = CreatePayment::new("100".to_string(), Currency::EUR.to_string(), payer, payee, "test payment".to_string());
+        let res = collection.create_payments(payment, None).await.expect("Error creating payment");
+        assert_ne!(res.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_payment_status(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+
+        
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let res = collection.get_payment_status("payment_id".to_string()).await.expect("Error getting payment status");
+        assert_ne!(res.status.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_request_to_withdraw_v1(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+        
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+
+        
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+
+        
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let payer : Party = Party {
+            party_id_type: "MSISDN".to_string(),
+            party_id: "+242064818006".to_string(),
+        };
+        let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
+        let res = collection.request_to_withdraw_v1(request, None).await.expect("Error requesting to withdraw");
+        assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_request_to_withdraw_v2(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+        
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+
+        
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+
+        
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let payer : Party = Party {
+            party_id_type: "MSISDN".to_string(),
+            party_id: "+242064818006".to_string(),
+        };
+        let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
+        let res = collection.request_to_withdraw_v2(request, None).await.expect("Error requesting to withdraw");
+        assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_request_withdraw_status(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+        
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+
+        
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+
+        
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let res = collection.request_to_withdraw_transaction_status("payment_id").await.expect("Error getting request to withdraw status");
+        assert_ne!(res.status.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_validate_account_holder_status(){
+        dotenv().ok();
+        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
+        
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+
+        
+        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
+        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
+
+        
+        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
+        let res = collection.validate_account_holder_status("account_holder_id", "account_holder_type").await.expect("Error validating account holder status");
+        assert!(res.is_ok());
+    }
+    
 
     
 

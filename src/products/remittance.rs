@@ -1,6 +1,8 @@
 use crate::{traits::{account::Account, auth::MOMOAuthorization}, responses::{token_response::TokenResponse, bcauthorize_response::BCAuthorizeResponse, oauth2tokenresponse::OAuth2TokenResponse, account_info_consent::UserInfoWithConsent, account_info::BasicUserInfoJsonResponse}, enums::environment::Environment};
 use base64::{engine::general_purpose, Engine as _};
+use chrono::{Utc, DateTime, NaiveDateTime};
 use crate::structs::balance::Balance;
+use rusqlite::{params, Connection, Result};
 
 
 
@@ -22,6 +24,17 @@ impl Remittance {
     
      */
     pub fn new(url: String, environment: Environment, api_user: String, api_key: String, primary_key: String, secondary_key: String) -> Remittance {
+        let conn = Connection::open("remittance_access_tokens.db").unwrap();
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS access_tokens (
+                id INTEGER PRIMARY KEY,
+                access_token TEXT NOT NULL,
+                token_type TEXT NOT NULL,
+                expires_in INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )",
+            params![],
+        ).unwrap();
         Remittance{
             url,
             primary_key,
@@ -29,6 +42,56 @@ impl Remittance {
             environment,
             api_user,
             api_key,
+        }
+    }
+
+        /*
+        This operation is used to insert an access token into the database
+        @return Ok(())
+     */
+    fn insert_access_token(&self, access_token: &str, token_type: &str, expires_in: i32) -> Result<(), Box<dyn std::error::Error>> {
+        let conn = Connection::open("remittance_access_tokens.db")?;
+        conn.execute(
+            "INSERT INTO access_tokens (access_token, token_type, expires_in) VALUES (?1, ?2, ?3)",
+            params![access_token, token_type, expires_in],
+        )?;
+
+        Ok(())
+    }
+
+    /*
+        This operation is used to get the latest access token from the database
+        @return TokenResponse
+     */
+    async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
+        let conn = Connection::open("remittance_access_tokens.db")?;
+        let mut stmt = conn.prepare("SELECT * FROM access_tokens ORDER BY created_at DESC LIMIT 1")?;
+        let access_result = stmt.query(params![]);
+        let mut access = access_result.unwrap();
+        let r = access.next().unwrap();
+        if r.is_some() {
+            println!("is some");
+            let row = r.unwrap();
+            let created_at: String = row.get(4)?;
+            let naive_datetime = NaiveDateTime::parse_from_str(&created_at, "%Y-%m-%d %H:%M:%S")?;
+            let date_time: DateTime<Utc> = DateTime::from_naive_utc_and_offset(naive_datetime, Utc);
+            let now = Utc::now();
+            let duration = now.signed_duration_since(date_time);
+            let duration = duration.num_seconds();
+            if duration > 3600 {
+                let token: TokenResponse = self.create_access_token().await?;
+                return Ok(token);
+            }else{
+                let token = TokenResponse{
+                    access_token: row.get(1)?,
+                    token_type: row.get(2)?,
+                    expires_in: row.get(3)?,
+                };
+                return Ok(token);
+            }
+        }else{
+            let token: TokenResponse = self.create_access_token().await?;
+            return Ok(token);
         }
     }
 
@@ -40,8 +103,9 @@ impl Remittance {
      */
     pub async fn cash_transfer(&self) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/remittance/v1_0/preapproval", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Cache-Control", "no-cache")
         .send().await?;
@@ -135,7 +199,7 @@ impl Account for Remittance {
         Ok(balance)
     }
 
-    async fn get_basic_user_info(&self) -> Result<BasicUserInfoJsonResponse, Box<dyn std::error::Error>> {
+    async fn get_basic_user_info(&self, account_holder_msisdn: &str) -> Result<BasicUserInfoJsonResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let res = client.post(format!("{}/remittance/v1_0/preapproval", self.url))
         .header("Authorization", format!("Basic {}", ""))
@@ -163,7 +227,7 @@ impl Account for Remittance {
         Ok(user_info_with_consent)
     }
 
-    async fn validate_account_holder_status(&self, account_holder_id: String) -> Result<(), Box<dyn std::error::Error>> {
+    async fn validate_account_holder_status(&self,  account_holder_id: &str, account_holder_type: &str) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let res = client.post(format!("{}/remittance/v1_0/preapproval", self.url))
         .header("Authorization", format!("Basic {}", ""))
@@ -206,7 +270,7 @@ impl MOMOAuthorization for Remittance {
         Ok(token_response)
     }
 
-    async fn bc_authorize(&self) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
+    async fn bc_authorize(&self, msisdn: String) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
         let authorization = self.encode(&self.primary_key, &self.secondary_key);
         let client = reqwest::Client::new();
         let res = client.post(format!("{}/remittance/v1_0/bc-authorize", self.url))

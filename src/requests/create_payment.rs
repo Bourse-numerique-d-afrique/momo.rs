@@ -5,7 +5,7 @@ use serde::{Serialize, Deserialize};
 use crate::structs::money::Money;
 
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CreatePayment {
     #[serde(rename = "externalTransactionId")]
     pub external_transaction_id: String,
@@ -28,6 +28,25 @@ pub struct CreatePayment {
     pub max_number_of_retries: i32,
     #[serde(rename = "includeSenderCharges")]
     pub include_sender_charges: bool,
+}
+
+impl CreatePayment {
+    pub fn new(money: Money, customer_reference: String, service_provider_user_name: String, coupon_id: String, product_id: String, product_offering_id: String, receiver_message: String, sender_note: String, max_number_of_retries: i32, include_sender_charges: bool) -> Self {
+        let external_id = uuid::Uuid::new_v4().to_string();
+        CreatePayment {
+            external_transaction_id:external_id,
+            money,
+            customer_reference,
+            service_provider_user_name,
+            coupon_id,
+            product_id,
+            product_offering_id,
+            receiver_message,
+            sender_note,
+            max_number_of_retries,
+            include_sender_charges
+        }
+    }
 }
 
 
