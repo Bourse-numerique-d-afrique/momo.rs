@@ -8,3 +8,6 @@ pub mod payment_result;
 pub mod pre_approval;
 pub mod request_to_pay_result;
 pub mod api_user_key;
+pub mod transfer_result;
+pub mod refund_result;
+pub mod cash_transfer_result;

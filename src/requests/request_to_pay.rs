@@ -38,9 +38,6 @@ impl RequestToPay {
             payee_note
         }
     }
-    fn update_external_id(&mut self, external_id: String) {
-        self.external_id = external_id;
-    }
 }
 
 

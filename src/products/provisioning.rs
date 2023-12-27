@@ -18,6 +18,11 @@ impl Provisioning {
         }
     }
 
+    /// .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
     /*
         Used to create an API user in the sandbox target environment.
      */
@@ -40,6 +45,11 @@ impl Provisioning {
         Ok(())
     }
 
+    /// .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if .
     /*
         Used to get API user information.
      */

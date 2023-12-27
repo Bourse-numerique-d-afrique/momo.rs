@@ -1,19 +1,16 @@
 
-
-
+use reqwest::Body;
 use serde::{Serialize, Deserialize};
 
 use crate::structs::party::Party;
 
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CashTransferResult {
-    #[serde(rename = "financialTransactionId")]
-    pub financial_transaction_id: String,
-    pub status: String,
-    pub reason: String,
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CashTransferRequest {
+    #[serde(rename = "amount")]
     pub amount: String,
+    #[serde(rename = "currency")]
     pub currency: String,
+    #[serde(rename = "payee")]
     pub payee: Party,
     #[serde(rename = "externalId")]
     pub external_id: String,
@@ -45,4 +42,13 @@ pub struct CashTransferResult {
     pub payer_msisdn: String,
     #[serde(rename = "payerGender")]
     pub payer_gender: String,
+}
+
+
+
+
+impl From<CashTransferRequest> for Body {
+    fn from(cash_transfer_request: CashTransferRequest) -> Self {
+        Body::from(serde_json::to_string(&cash_transfer_request).unwrap())
+    }
 }

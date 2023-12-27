@@ -1,4 +1,4 @@
-use crate::{traits::{account::Account, auth::MOMOAuthorization}, responses::{token_response::TokenResponse, bcauthorize_response::BCAuthorizeResponse, oauth2tokenresponse::OAuth2TokenResponse, account_info_consent::UserInfoWithConsent, account_info::BasicUserInfoJsonResponse}, enums::{environment::Environment, access_type::AccessType}, requests::bc_authorize::BcAuthorize};
+use crate::{traits::{account::Account, auth::MOMOAuthorization}, responses::{token_response::TokenResponse, bcauthorize_response::BCAuthorizeResponse, oauth2tokenresponse::OAuth2TokenResponse, account_info_consent::UserInfoWithConsent, account_info::BasicUserInfoJsonResponse, transfer_result::TransferResult, cash_transfer_result::CashTransferResult}, enums::{environment::Environment, access_type::AccessType}, requests::{bc_authorize::BcAuthorize, transfer::Transfer, cash_transfer::CashTransferRequest}};
 use chrono::{Utc, DateTime, NaiveDateTime};
 use crate::structs::balance::Balance;
 use rusqlite::{params, Connection, Result};
@@ -37,7 +37,7 @@ impl Remittance {
             )",
             params![],
         ).unwrap();
-        let manager = SqliteConnectionManager::file("collection_access_tokens.db");
+        let manager = SqliteConnectionManager::file("remittance_access_tokens.db");
         let pool = r2d2::Pool::new(manager).expect("Failed to create pool.");
         Remittance{
             url,
@@ -106,35 +106,48 @@ impl Remittance {
         Status of the transaction can be validated by using GET /cashtransfer/{referenceId}
         @return Ok(())
      */
-    pub async fn cash_transfer(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn cash_transfer(&self, transfer: CashTransferRequest, callback_url: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
-        let res = client.post(format!("{}/remittance/v1_0/preapproval", self.url))
+        let res = client.post(format!("{}/remittance/v2_0/cashtransfer", self.url))
         .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Cache-Control", "no-cache")
+        .header("X-Reference-Id", &transfer.external_id)
+        .header("X-Callback-Url", callback_url.unwrap_or(""))
+        .body(transfer)
         .send().await?;
 
         
-        let response = res.text().await?;
-        Ok(())
+        if res.status().is_success() {
+            Ok(())
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     /*
         This operation is used to get the status of a transfer.
         X-Reference-Id that was passed in the post is used as reference to the request.
      */
-    pub async fn get_cash_transfer_status(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn get_cash_transfer_status(&self, transfer_id: &str) -> Result<CashTransferResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let res = client.post(format!("{}/remittance/v1_0/preapproval", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        let access_token = self.get_valid_access_token().await?;
+        let res = client.get(format!("{}/remittance/v2_0/cashtransfer/{}", self.url, transfer_id))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Cache-Control", "no-cache")
-        .send().await?;
+        .send()
+        .await?;
 
         
-        let response = res.text().await?;
-        Ok(())
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let cash_transfer_result: CashTransferResult = serde_json::from_str(&body)?;
+            Ok(cash_transfer_result)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
 
@@ -142,34 +155,46 @@ impl Remittance {
         This operation is used to get the status of a transfer.
         X-Reference-Id that was passed in the post is used as reference to the request.
      */
-    pub async fn get_transfer_status(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn get_transfer_status(&self, transfer_id: &str) -> Result<TransferResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let res = client.post(format!("{}/remittance/v1_0/preapproval", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        let access_token = self.get_valid_access_token().await?;
+        let res = client.post(format!("{}/remittance/v1_0/transfer/{}", self.url, transfer_id))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Cache-Control", "no-cache")
-        .send().await?;
+        .send()
+        .await?;
 
-        
-        let response = res.text().await?;
-        Ok(())
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let transfer_result: TransferResult = serde_json::from_str(&body)?;
+            Ok(transfer_result)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     /*
         Transfer operation is used to transfer an amount from the own account to a payee account.
         Status of the transaction can validated by using the GET /transfer/{referenceId}
      */
-    pub async fn transfer(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn transfer(&self, transfer: Transfer) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/remittance/v1_0/preapproval", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
+        .header("X-Reference-Id", &transfer.external_id)
         .header("Cache-Control", "no-cache")
-        .send().await?;
+        .body(transfer)
+        .send()
+        .await?;
 
-        
-        let response = res.text().await?;
+    if res.status().is_success() {
         Ok(())
+    }else {
+        Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+    }
     }
 
     
@@ -178,71 +203,95 @@ impl Remittance {
 impl Account for Remittance {
     async fn get_account_balance(&self) -> Result<Balance, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let res = client.post(format!("{}/remittance/v1_0/preapproval", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        let access_token = self.get_valid_access_token().await?;
+        let res = client.get(format!("{}/remittance/v1_0/account/balance", self.url))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Cache-Control", "no-cache")
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
         .send().await?;
 
-        
-        let response = res.text().await?;
-        let balance: Balance = serde_json::from_str(&response)?;
-        Ok(balance)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let balance: Balance = serde_json::from_str(&body)?;
+            Ok(balance)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     async fn get_account_balance_in_specific_currency(&self, currency: String) -> Result<Balance, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let res = client.post(format!("{}/remittance/v1_0/preapproval", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        let access_token = self.get_valid_access_token().await?;
+        let res = client.post(format!("{}/remittance/v1_0/account/balance/{}", self.url, currency))
+        .bearer_auth(access_token.access_token)
+        .header("Content-Type", "application/json")
         .header("X-Target-Environment", self.environment.to_string())
-        .header("Cache-Control", "no-cache")
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .header("Content-Length", "0")
+        .body("")
         .send().await?;
 
-        
-        let response = res.text().await?;
-        let balance: Balance = serde_json::from_str(&response)?;
-        Ok(balance)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let balance: Balance = serde_json::from_str(&body)?;
+            Ok(balance)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     async fn get_basic_user_info(&self, account_holder_msisdn: &str) -> Result<BasicUserInfoJsonResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let res = client.post(format!("{}/remittance/v1_0/preapproval", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        let access_token = self.get_valid_access_token().await?;
+        let res = client.get(format!("{}/remittance/v1_0/accountholder/msisdn/{}/basicuserinfo", self.url, account_holder_msisdn))
+        .bearer_auth(access_token.access_token)
+        .header("Content-Type", "application/json")
         .header("X-Target-Environment", self.environment.to_string())
-        .header("Cache-Control", "no-cache")
-        .send().await?;
-
-        
-        let response = res.text().await?;
-        let basic_user_info: BasicUserInfoJsonResponse = serde_json::from_str(&response)?;
-        Ok(basic_user_info)
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .header("Cache-Control", "no-cache").send().await?;
+    
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let basic_user_info: BasicUserInfoJsonResponse = serde_json::from_str(&body)?;
+            Ok(basic_user_info)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     async fn get_user_info_with_consent(&self) -> Result<UserInfoWithConsent, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let res = client.post(format!("{}/remittance/v1_0/preapproval", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        let access_token = self.get_valid_access_token().await?;
+        let res = client.post(format!("{}/remittance/oauth2/v1_0/userinfo", self.url))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
-        .header("Cache-Control", "no-cache")
-        .send().await?;
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .header("Cache-Control", "no-cache").send().await?;
 
-        
-        let response = res.text().await?;
-        let user_info_with_consent: UserInfoWithConsent = serde_json::from_str(&response)?;
-        Ok(user_info_with_consent)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let basic_user_info: UserInfoWithConsent = serde_json::from_str(&body)?;
+            Ok(basic_user_info)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     async fn validate_account_holder_status(&self,  account_holder_id: &str, account_holder_type: &str) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let res = client.post(format!("{}/remittance/v1_0/preapproval", self.url))
-        .header("Authorization", format!("Basic {}", ""))
+        let access_token = self.get_valid_access_token().await?;
+        let res = client.post(format!("{}/remittance/v1_0/accountholder/{}/{}/active", self.url, account_holder_id, account_holder_type))
+        .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
-        .header("Cache-Control", "no-cache")
-        .send().await?;
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .header("Cache-Control", "no-cache").send().await?;
 
-        
-        let response = res.text().await?;
-        Ok(())
+        if res.status().is_success() {
+            Ok(())
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 }
 
@@ -253,11 +302,20 @@ impl MOMOAuthorization for Remittance {
         let res = client.post(format!("{}/remittance/token/", self.url))
         .basic_auth(self.api_user.to_string(), Some(self.api_key.to_string()))
         .header("Cache-Control", "no-cache")
+        .header("Content-type", "application/x-www-form-urlencoded")
+        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .header("Content-Length", "0")
+        .body("")
         .send().await?;
 
-        let body = res.text().await?;
-        let token_response: TokenResponse = serde_json::from_str(&body)?;
-        Ok(token_response)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let token_response: TokenResponse = serde_json::from_str(&body)?;
+            self.insert_access_token(&token_response.access_token, &token_response.token_type, token_response.expires_in)?;
+            Ok(token_response)
+        } else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     async fn create_o_auth_2_token(&self) -> Result<OAuth2TokenResponse, Box<dyn std::error::Error>> {
@@ -267,34 +325,43 @@ impl MOMOAuthorization for Remittance {
         .header("X-Target-Environment", self.environment.to_string())
         .header("Content-type", "application/x-www-form-urlencoded")
         .header("Cache-Control", "no-cache")
-        .send().await?;
+        .send()
+        .await?;
 
-        let body = res.text().await?;
-        let token_response: OAuth2TokenResponse = serde_json::from_str(&body)?;
-        Ok(token_response)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let token_response: OAuth2TokenResponse = serde_json::from_str(&body)?;
+            Ok(token_response)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     async fn bc_authorize(&self, msisdn: String) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let res = client.post(format!("{}/remittance/v1_0/bc-authorize", self.url))
-        .basic_auth(self.api_user.to_string(), Some(self.api_key.to_string()))
         .header("X-Target-Environment", self.environment.to_string())
         .header("X-Callback-Url", "callback")
         .header("Content-type", "application/x-www-form-urlencoded")
         .header("Cache-Control", "no-cache")
         .body(BcAuthorize{login_hint: format!("ID:{}/MSISDN", msisdn), scope: "profile".to_string(), access_type: AccessType::Offline}) // scope can be profile
-        .send().await?;
+        .send()
+        .await?;
 
-        let body = res.text().await?;
-        let token_response: BCAuthorizeResponse = serde_json::from_str(&body)?;
-        Ok(token_response)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let token_response: BCAuthorizeResponse = serde_json::from_str(&body)?;
+            Ok(token_response)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 }
 
 
 #[cfg(test)]
 mod tests {
-    use crate::{enums::environment::Environment, products::remittance::Remittance, traits::account::Account};
+    use crate::{enums::environment::Environment, products::remittance::Remittance, traits::account::Account, requests::{cash_transfer::CashTransferRequest, transfer::Transfer}, structs::party::Party};
     use dotenv::dotenv;
     use std::env;
     use crate::structs::balance::Balance;
@@ -308,7 +375,30 @@ mod tests {
         let api_user = env::var("API_USER").expect("API_USER not set");
         let api_key = env::var("API_KEY").expect("API_KEY not set");
         let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        remittance.cash_transfer().await.unwrap();
+        let transer = CashTransferRequest {
+            amount: "1000".to_string(),
+            currency: "EUR".to_string(),
+            external_id: "123456789".to_string(),
+            payee_note: "payee_note".to_string(),
+            payer_message: "payer_message".to_string(),
+            payee: Party {
+                party_id_type: "MSISDN".to_string(),
+                party_id: "256774290781".to_string(),
+            },
+            originating_country: "UG".to_string(),
+            original_amount: "1000".to_string(),
+            original_currency: "EUR".to_string(),
+            payer_identification_type: "MSISDN".to_string(),
+            payer_identification_number: "256774290781".to_string(),
+            payer_identity: "256774290781".to_string(),
+            payer_first_name: "John".to_string(),
+            payer_surname: "Doe".to_string(),
+            payer_language_code: "en".to_string(),
+            payer_email: "".to_string(),
+            payer_gender: "M".to_string(),
+            payer_msisdn: "256774290781".to_string(),
+        };
+        remittance.cash_transfer(transer, None).await.unwrap();
     }
 
 
@@ -322,7 +412,18 @@ mod tests {
         let api_user = env::var("API_USER").expect("API_USER not set");
         let api_key = env::var("API_KEY").expect("API_KEY not set");
         let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        remittance.transfer().await.unwrap();
+        let transfer = Transfer {
+            amount: "1000".to_string(),
+            currency: "EUR".to_string(),
+            external_id: "123456789".to_string(),
+            payee_note: "payee_note".to_string(),
+            payer_message: "payer_message".to_string(),
+            payee: Party {
+                party_id_type: "MSISDN".to_string(),
+                party_id: "256774290781".to_string(),
+            },
+        };
+        remittance.transfer(transfer).await.unwrap();
     }
 
     #[tokio::test]
@@ -334,7 +435,7 @@ mod tests {
         let api_user = env::var("API_USER").expect("API_USER not set");
         let api_key = env::var("API_KEY").expect("API_KEY not set");
         let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        remittance.get_cash_transfer_status().await.unwrap();
+        remittance.get_cash_transfer_status("transfer_id").await.unwrap();
     }
 
 
@@ -347,7 +448,7 @@ mod tests {
         let api_user = env::var("API_USER").expect("API_USER not set");
         let api_key = env::var("API_KEY").expect("API_KEY not set");
         let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        remittance.get_transfer_status().await.unwrap();
+        remittance.get_transfer_status("transfer_id").await.unwrap();
     }
 
     #[tokio::test]

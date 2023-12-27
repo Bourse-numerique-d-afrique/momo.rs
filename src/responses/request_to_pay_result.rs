@@ -2,7 +2,7 @@
 
 
 use serde::{Serialize, Deserialize};
-use crate::{errors::error::ErrorReason, structs::party::Party};
+use crate:: structs::party::Party;
 
 
 #[derive(Debug, Serialize, Deserialize)]

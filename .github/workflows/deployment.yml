@@ -13,7 +13,7 @@ jobs:
             rustup install nightly
             rustup default nightly
 
-      - name: Install cargo-make
+      - name: test
         run: cargo test
 
   release:

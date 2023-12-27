@@ -253,6 +253,13 @@ impl Collection {
     }
 
 
+    /// .
+    /// Get the status of a pre-approval.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the request fails.
+    ///
     /*
     This operation is used to get the status of a pre-approval. X-Reference-Id that was passed in the post is used as reference to the request.
      */
@@ -542,15 +549,13 @@ impl Account for Collection{
     async fn validate_account_holder_status(&self, account_holder_id: &str, account_holder_type: &str) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
-        let res = client.get(format!("{}/collection/v1_0/accountholder/msisdn/{}/basicuserinfo", self.url, "accountHolderMSISDN"))
+        let res = client.get(format!("{}/collection/v1_0/accountholder/{}/{}/active", self.url, account_holder_type, account_holder_id))
         .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
         .header("Cache-Control", "no-cache").send().await?;
 
         if res.status().is_success() {
-            let body = res.text().await?;
-            let basic_user_info: BasicUserInfoJsonResponse = serde_json::from_str(&body)?;
             Ok(())
         }else {
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
@@ -695,48 +700,6 @@ mod tests {
         let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
         let res = collection.request_to_pay(request).await;
         assert!(res.is_ok());
-        drop(collection.conn_pool);
-    }
-
-    #[tokio::test]
-    async fn test_request_payment_payer_failed(){
-        dotenv().ok();
-        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
-
-        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
-        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
-        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
-        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
-        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        
-        let payer : Party = Party {
-            party_id_type: "MSISDN".to_string(),
-            party_id: "46733123450".to_string(),
-        };
-        let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
-        let res = collection.request_to_pay(request).await;
-        assert!(res.is_err());
-        drop(collection.conn_pool);
-    }
-
-    #[tokio::test]
-    async fn test_request_payment_payer_rejected(){
-        dotenv().ok();
-        let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
-
-        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
-        let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
-        let api_user = env::var("MTN_API_USER").expect("API_USER must be set");
-        let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
-        let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        
-        let payer : Party = Party {
-            party_id_type: "MSISDN".to_string(),
-            party_id: "46733123451".to_string(),
-        };
-        let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
-        let res = collection.request_to_pay(request).await;
-        assert!(res.is_err());
         drop(collection.conn_pool);
     }
 

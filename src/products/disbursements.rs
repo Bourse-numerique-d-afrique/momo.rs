@@ -4,7 +4,7 @@ use crate::{
     responses::{
         account_info::BasicUserInfoJsonResponse, account_info_consent::UserInfoWithConsent,
         bcauthorize_response::BCAuthorizeResponse, oauth2tokenresponse::OAuth2TokenResponse,
-        token_response::TokenResponse,
+        token_response::TokenResponse, transfer_result::TransferResult, refund_result::RefundResult,
     },
     traits::{account::Account, auth::MOMOAuthorization},
 };
@@ -83,7 +83,6 @@ impl Disbursements {
         let mut access = access_result.unwrap();
         let r = access.next().unwrap();
         if r.is_some() {
-            println!("is some");
             let row = r.unwrap();
             let created_at: String = row.get(4)?;
             let naive_datetime = NaiveDateTime::parse_from_str(&created_at, "%Y-%m-%d %H:%M:%S")?;
@@ -106,6 +105,7 @@ impl Disbursements {
             let token: TokenResponse = self.create_access_token().await?;
             return Ok(token);
         }
+        
     }
 
     /*
@@ -113,7 +113,7 @@ impl Disbursements {
        Status of the transaction can be validated by using the GET /deposit/{referenceId}
        @return Ok(())
     */
-    pub async fn deposit_v1(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn deposit_v1(&self, transfer: Transfer) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client
@@ -125,19 +125,15 @@ impl Disbursements {
             .header("X-Target-Environment", self.environment.to_string())
             .header("X-Reference-Id", "value")
             .header("Cache-Control", "no-cache")
-            .body(Transfer {
-                amount: todo!(),
-                currency: todo!(),
-                external_id: todo!(),
-                payee: todo!(),
-                payer_message: todo!(),
-                payee_note: todo!(),
-            })
+            .body(transfer)
             .send()
             .await?;
 
-        let response = res.text().await?;
-        Ok(())
+            if res.status().is_success() {
+                Ok(())
+            }else {
+                Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+            }
     }
 
     /*
@@ -145,7 +141,7 @@ impl Disbursements {
        Status of the transaction can be validated by using the GET /deposit/{referenceId}
        @return Ok(())
     */
-    pub async fn deposit_v2(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn deposit_v2(&self, transfer: Transfer) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client
@@ -157,30 +153,26 @@ impl Disbursements {
             .header("X-Target-Environment", self.environment.to_string())
             .header("X-Reference-Id", "value")
             .header("Cache-Control", "no-cache")
-            .body(Transfer {
-                amount: todo!(),
-                currency: todo!(),
-                external_id: todo!(),
-                payee: todo!(),
-                payer_message: todo!(),
-                payee_note: todo!(),
-            })
+            .body(transfer)
             .send()
             .await?;
 
-        let response = res.text().await?;
-        Ok(())
+        if res.status().is_success() {
+            Ok(())
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     /*
        This operation is used to get the status of a deposit.
        X-Reference-Id that was passed in the post is used as reference to the request.
     */
-    pub async fn get_deposit_status(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn get_deposit_status(&self) -> Result<TransferResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client
-            .post(format!(
+            .get(format!(
                 "{}/disbursement/v1_0/deposit/{}",
                 self.url, "referenceId"
             ))
@@ -190,8 +182,13 @@ impl Disbursements {
             .send()
             .await?;
 
-        let response = res.text().await?;
-        Ok(())
+            if res.status().is_success() {
+                let body = res.text().await?;
+                let transfer_result: TransferResult = serde_json::from_str(&body)?;
+                Ok(transfer_result)
+            }else {
+                Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+            }
     }
 
     /*
@@ -200,11 +197,11 @@ impl Disbursements {
 
        @return Ok(())
     */
-    pub async fn get_refund_status(&self, reference_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn get_refund_status(&self, reference_id: &str) -> Result<RefundResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client
-            .post(format!(
+            .get(format!(
                 "{}/disbursement/v1_0/refund/{}",
                 self.url, reference_id
             ))
@@ -213,8 +210,14 @@ impl Disbursements {
             .header("Cache-Control", "no-cache")
             .send()
             .await?;
-        let response = res.text().await?;
-        Ok(())
+        
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let refund_result: RefundResult = serde_json::from_str(&body)?;
+            Ok(refund_result)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     /*
@@ -222,13 +225,13 @@ impl Disbursements {
        X-Reference-Id that was passed in the post is used as reference to the request.
        @return Ok(())
     */
-    pub async fn get_transfer_status(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn get_transfer_status(&self, transfer_id: &str) -> Result<TransferResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client
-            .post(format!(
+            .get(format!(
                 "{}/disbursement/v1_0/transfer/{}",
-                self.url, "referenceId"
+                self.url, transfer_id
             ))
             .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
@@ -236,8 +239,13 @@ impl Disbursements {
             .send()
             .await?;
 
-        let response = res.text().await?;
-        Ok(())
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let transfer_result: TransferResult = serde_json::from_str(&body)?;
+            Ok(transfer_result)
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     /*
@@ -255,14 +263,17 @@ impl Disbursements {
             ))
             .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
-            .header("X-Reference-Id", "")
+            .header("X-Reference-Id", &refund.external_id)
             .header("Cache-Control", "no-cache")
             .body(refund)
             .send()
             .await?;
 
-        let response = res.text().await?;
-        Ok(())
+        if res.status().is_success() {
+            Ok(())
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     /*
@@ -280,14 +291,17 @@ impl Disbursements {
             ))
             .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
-            .header("X-Reference-Id", "")
+            .header("X-Reference-Id", &refund.external_id)
             .header("Cache-Control", "no-cache")
             .body(refund)
             .send()
             .await?;
 
-        let response = res.text().await?;
-        Ok(())
+        if res.status().is_success() {
+            Ok(())
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     /*
@@ -305,35 +319,42 @@ impl Disbursements {
             ))
             .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
-            .header("X-Reference-Id", "")
+            .header("X-Reference-Id", &transfer.external_id)
             .header("Cache-Control", "no-cache")
             .body(transfer)
             .send()
             .await?;
 
-        let response = res.text().await?;
-        Ok(())
+        if res.status().is_success() {
+            Ok(())
+        }else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 }
 
 impl Account for Disbursements {
     async fn get_account_balance(&self) -> Result<Balance, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client
-            .post(format!(
+            .get(format!(
                 "{}/disbursement/v1_0/account/balance",
                 self.url
             ))
-            .header("Authorization", format!("Basic {}", ""))
+            .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
             .header("Cache-Control", "no-cache")
-            .send()
-            .await?;
+            .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+            .send().await?;
 
-        let response = res.text().await?;
-        let balance: Balance = serde_json::from_str(&response)?;
-
-        Ok(balance)
+            if res.status().is_success() {
+                let body = res.text().await?;
+                let balance: Balance = serde_json::from_str(&body)?;
+                Ok(balance)
+            }else {
+                Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+            }
     }
 
     async fn get_account_balance_in_specific_currency(
@@ -341,60 +362,78 @@ impl Account for Disbursements {
         currency: String,
     ) -> Result<Balance, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client
-            .post(format!(
-                "{}/disbursement/v1_0/preapproval",
-                self.url
+            .get(format!(
+                "{}/disbursement/v1_0/account/balance/{}",
+                self.url,
+                currency
             ))
-            .header("Authorization", format!("Basic {}", ""))
+            .bearer_auth(access_token.access_token)
+            .header("Content-Type", "application/json")
             .header("X-Target-Environment", self.environment.to_string())
-            .header("Cache-Control", "no-cache")
-            .send()
-            .await?;
-
-        let response = res.text().await?;
-        let balance: Balance = serde_json::from_str(&response)?;
-        Ok(balance)
+            .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+            .header("Content-Length", "0")
+            .body("")
+            .send().await?;
+    
+            if res.status().is_success() {
+                let body = res.text().await?;
+                let balance: Balance = serde_json::from_str(&body)?;
+                Ok(balance)
+            }else {
+                Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+            }
     }
 
     async fn get_basic_user_info(
         &self, account_holder_msisdn: &str
     ) -> Result<BasicUserInfoJsonResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client
-            .post(format!(
-                "{}/disbursement/v1_0/preapproval",
-                self.url
+            .get(format!(
+                "{}/disbursement/v1_0/accountholder/msisdn/{}/basicuserinfo",
+                self.url,
+                account_holder_msisdn
             ))
-            .header("Authorization", format!("Basic {}", ""))
+            .bearer_auth(access_token.access_token)
+            .header("Content-Type", "application/json")
             .header("X-Target-Environment", self.environment.to_string())
-            .header("Cache-Control", "no-cache")
-            .send()
-            .await?;
-
-        let body = res.text().await?;
-        let basic_user_info: BasicUserInfoJsonResponse = serde_json::from_str(&body)?;
-        Ok(basic_user_info)
+            .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+            .header("Cache-Control", "no-cache").send().await?;
+        
+            if res.status().is_success() {
+                let body = res.text().await?;
+                let basic_user_info: BasicUserInfoJsonResponse = serde_json::from_str(&body)?;
+                Ok(basic_user_info)
+            }else {
+                Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+            }
     }
 
     async fn get_user_info_with_consent(
         &self,
     ) -> Result<UserInfoWithConsent, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client
             .post(format!(
-                "{}/disbursement/v1_0/preapproval",
+                "{}/disbursement/oauth2/v1_0/userinfo",
                 self.url
             ))
-            .header("Authorization", format!("Basic {}", ""))
+            .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
-            .header("Cache-Control", "no-cache")
-            .send()
-            .await?;
-
-        let body = res.text().await?;
-        let basic_user_info: UserInfoWithConsent = serde_json::from_str(&body)?;
-        Ok(basic_user_info)
+            .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+            .header("Cache-Control", "no-cache").send().await?;
+    
+            if res.status().is_success() {
+                let body = res.text().await?;
+                let basic_user_info: UserInfoWithConsent = serde_json::from_str(&body)?;
+                Ok(basic_user_info)
+            }else {
+                Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+            }
     }
 
     async fn validate_account_holder_status(
@@ -402,19 +441,24 @@ impl Account for Disbursements {
         account_holder_id: &str, account_holder_type: &str
     ) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
+        let access_token = self.get_valid_access_token().await?;
         let res = client
             .post(format!(
-                "{}/disbursement/v1_0/preapproval",
-                self.url
+                "{}/disbursement/v1_0/accountholder/{}/{}/active",
+                self.url,
+                account_holder_type,
+                account_holder_id
             ))
-            .header("Authorization", format!("Basic {}", ""))
+            .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
-            .header("Cache-Control", "no-cache")
-            .send()
-            .await?;
-
-        let response = res.text().await?;
-        Ok(())
+            .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+            .header("Cache-Control", "no-cache").send().await?;
+    
+            if res.status().is_success() {
+                Ok(())
+            }else {
+                Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+            }
     }
 }
 
@@ -428,12 +472,17 @@ impl MOMOAuthorization for Disbursements {
             .header("Content-type", "application/x-www-form-urlencoded")
             .header("Ocp-Apim-Subscription-Key", &self.primary_key)
             .header("Content-Length", "0")
-            .send()
-            .await?;
+            .body("")
+            .send().await?;
 
-        let body = res.text().await?;
-        let token_response: TokenResponse = serde_json::from_str(&body)?;
-        Ok(token_response)
+        if res.status().is_success() {
+            let body = res.text().await?;
+            let token_response: TokenResponse = serde_json::from_str(&body)?;
+            self.insert_access_token(&token_response.access_token, &token_response.token_type, token_response.expires_in)?;
+            Ok(token_response)
+        } else {
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
     async fn create_o_auth_2_token(
@@ -453,9 +502,13 @@ impl MOMOAuthorization for Disbursements {
             .send()
             .await?;
 
-        let body = res.text().await?;
-        let token_response: OAuth2TokenResponse = serde_json::from_str(&body)?;
-        Ok(token_response)
+            if res.status().is_success() {
+                let body = res.text().await?;
+                let token_response: OAuth2TokenResponse = serde_json::from_str(&body)?;
+                Ok(token_response)
+            }else {
+                Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+            }
     }
 
     async fn bc_authorize(&self, msisdn: String) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
@@ -474,9 +527,13 @@ impl MOMOAuthorization for Disbursements {
             .send()
             .await?;
 
-        let body = res.text().await?;
-        let token_response: BCAuthorizeResponse = serde_json::from_str(&body)?;
-        Ok(token_response)
+            if res.status().is_success() {
+                let body = res.text().await?;
+                let token_response: BCAuthorizeResponse = serde_json::from_str(&body)?;
+                Ok(token_response)
+            }else {
+                Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+            }
     }
 }
 
@@ -487,7 +544,7 @@ mod tests {
     use crate::{
         enums::environment::Environment,
         products::disbursements::Disbursements,
-        traits::{account::Account, auth::MOMOAuthorization},
+        traits::{account::Account, auth::MOMOAuthorization}, requests::transfer::Transfer, structs::party::Party,
     };
 
     #[tokio::test]
@@ -631,7 +688,18 @@ mod tests {
         let disbursements = Disbursements::new(
             mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
         );
-        disbursements.deposit_v1().await.unwrap();
+        let transfer = Transfer {
+            amount: "1000".to_string(),
+            currency: "EUR".to_string(),
+            external_id: "123456789".to_string(),
+            payee_note: "payee_note".to_string(),
+            payer_message: "payer_message".to_string(),
+            payee: Party {
+                party_id_type: "MSISDN".to_string(),
+                party_id: "256774290781".to_string(),
+            },
+        };
+        disbursements.deposit_v1(transfer).await.unwrap();
     }
 
     #[tokio::test]
@@ -645,7 +713,19 @@ mod tests {
         let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
         let disbursements = Disbursements::new(
             mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        disbursements.deposit_v2().await.unwrap();
+
+            let transfer = Transfer {
+                amount: "1000".to_string(),
+                currency: "EUR".to_string(),
+                external_id: "123456789".to_string(),
+                payee_note: "payee_note".to_string(),
+                payer_message: "payer_message".to_string(),
+                payee: Party {
+                    party_id_type: "MSISDN".to_string(),
+                    party_id: "256774290781".to_string(),
+                },
+            };
+        disbursements.deposit_v2(transfer).await.unwrap();
     }
 
     #[tokio::test]
@@ -767,7 +847,9 @@ mod tests {
         let disbursements = Disbursements::new(
             mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
         );
-        disbursements.get_transfer_status().await.unwrap();
+
+
+        disbursements.get_transfer_status("refence_id").await.unwrap();
     }
 
   
