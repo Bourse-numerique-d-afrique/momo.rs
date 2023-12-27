@@ -14,7 +14,7 @@ jobs:
             rustup default nightly
 
       - name: test
-        run: cargo test
+        run: cargo test -- -D warnings
 
   release:
     needs: build

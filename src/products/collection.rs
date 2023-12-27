@@ -19,7 +19,9 @@ use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 
 
-
+/// # Collection
+/// This product provides a way to request payments from a customer.
+/// # Example
 pub struct Collection {
     pub url: String,
     pub primary_key: String,
@@ -32,12 +34,6 @@ pub struct Collection {
 
 
 impl Collection {
-    /*
-        create a new instance of the collection product
-        @param url
-        @return Collection
-    
-     */
     pub fn new(url: String, environment: Environment, api_user: String, api_key: String, primary_key: String, secondary_key: String) -> Collection {
         let conn = Connection::open("collection_access_tokens.db").unwrap();
         conn.execute(
@@ -65,9 +61,11 @@ impl Collection {
         }
     }
 
-
     /*
         This operation is used to insert an access token into the database
+        @param access_token
+        @param token_type
+        @param expires_in
         @return Ok(())
      */
     fn insert_access_token(&self, access_token: &str, token_type: &str, expires_in: i32) -> Result<(), Box<dyn std::error::Error>> {
