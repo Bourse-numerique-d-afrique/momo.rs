@@ -18,63 +18,61 @@ cargo add mtnmomo
 ```
 
 
-### Usage
-### Create a new instance of momo
-To create an instance of momo you need to have an api_user, url and environment (sandbox or production).
- ```rust
-    use mtnmomo::Momo;
+### MTN Mobile Money API
 
-    fn main() -> () {
-        let url = "https://sandbox.momodeveloper.mtn.com"; // the url of the api you are using for sandbox please use https://sandbox.momodeveloper.mtn.com
-        let api_user = "api_user"; // api_user UUID of the api user, must be created first using UUID::new_v4()
-        let momo = Momo::new("url", "api_user", Environment::Sandbox); // create a new instance of momo
-    }
- ```
-### Usage for Collections
-To create an instance of collection you need to have a primary_key and secondary_key of the collection product.
-You can get the primary_key and secondary_key from https://momodeveloper.mtn.com when you create a collection product.
- ```rust
-    use mtnmomo::Momo;
+This package provides for an easy way to connect to MTN MoMo API, it provides for the following products:
+- Collection
+- Disbursements
+- Remittance
+- Provisioning in case of sandbox environment
 
-    fn main() -> () {
-        let url = "https://sandbox.momodeveloper.mtn.com"; // the url of the api you are using for sandbox please use https://sandbox.momodeveloper.mtn.com
-        let api_user = "api_user"; // api_user UUID of the api user, must be created first using UUID::new_v4()
-        let momo = Momo::new("url", "api_user", Environment::Sandbox); // create a new instance of momo
-        // @param primary_key: the primary key of the collection given by https://momodeveloper.mtn.com when you create a collection product
-        // @param secondary_key: the secondary key of the collection given by https://momodeveloper.mtn.com when you create a collection product
-        let collection = momo.collection(primary_key, secondary_key); // create a new instance of collection
-    }
- ```
+### how to use:
+```rust
+use mtnmomo::Momo;
+use mtnmomo::Environment;
+use uuid::Uuid;
 
+#[tokio::main]
+async fn main() {
+   let api_user = Uuid::new_v4().to_string();
+   let api_key = Uuid::new_v4().to_string();
+   let mtn_url = "https://sandbox.momodeveloper.mtn.com";
+   let momo = Momo::new(mtn_url.to_string(), api_user, Environment::Sandbox, None).await.unwrap();
+   let collection = momo.collection(api_user, api_key);
+}
 
-### Usage for Disbursements
-To create an instance of disbursement you need to have a primary_key and secondary_key of the disbursement product.
-You can get the primary_key and secondary_key from https://momodeveloper.mtn.com when you create a disbursement product.
- ```rust
-    use mtnmomo::Momo;
+```
+After initializing the Momo struct, you can then use the collection, disbursement or remittance methods to initialize the respective products.
+The products have methods that you can use to interact with the API.
+For example, to request a payment from a customer, you can use the request_to_pay method of the Collection product.
 
-    fn main() -> () {
-        let url = "https://sandbox.momodeveloper.mtn.com"; // the url of the api you are using for sandbox please use https://sandbox.momodeveloper.mtn.com
-        let api_user = "api_user"; // api_user UUID of the api user, must be created first using UUID::new_v4()
-        let momo = Momo::new("url", "api_user", Environment::Sandbox); // create a new instance of momo
-        // @param primary_key: the primary key of the disbursement given by https://momodeveloper.mtn.com when you create a disbursement product
-        // @param secondary_key: the secondary key of the disbursement given by https://momodeveloper.mtn.com when you create a disbursement product
-        let disbursement = momo.disbursement(primary_key, secondary_key); // create a new instance of disbursement
-    }
- ```
+```rust
+use mtnmomo::Momo;
+use mtnmomo::Environment;
+use uuid::Uuid;
+use mtnmomo::structs::party::Party;
+use mtnmomo::requests::request_to_pay::RequestToPay;
 
-### Usage for Remittances
-To create an instance of disbursement you need to have a primary_key and secondary_key of the remittance product.
-You can get the primary_key and secondary_key from https://momodeveloper.mtn.com when you create a remittance product.
- ```rust
-    use mtnmomo::Momo;
+#[tokio::main]
+async fn main() {
+  let api_user = Uuid::new_v4().to_string();
+  let api_key = Uuid::new_v4().to_string();
+  let mtn_url = "https://sandbox.momodeveloper.mtn.com";
+  let momo = Momo::new(mtn_url.to_string(), api_user, Environment::Sandbox, None).await.unwrap();
+  let collection = momo.collection(api_user, api_key);
 
-    fn main() -> () {
-        let url = "https://sandbox.momodeveloper.mtn.com"; // the url of the api you are using for sandbox please use https://sandbox.momodeveloper.mtn.com
-        let api_user = "api_user"; // api_user UUID of the api user, must be created first using UUID::new_v4()
-        let momo = Momo::new("url", "api_user", Environment::Sandbox); // create a new instance of momo
-        // @param primary_key: the primary key of the remittance given by https://momodeveloper.mtn.com when you create a remittance product
-        // @param secondary_key: the secondary key of the remittance given by https://momodeveloper.mtn.com when you create a remittance product
-        let remittance = momo.remittance(primary_key, secondary_key); // create a new instance of remittance
-    }
- ```
+   let payer : Party = Party {
+          party_id_type: "MSISDN".to_string(),
+         party_id: "+242064818006".to_string(),
+     };
+
+  let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
+  let result = collection.request_to_pay(request).await;
+  assert_eq!(result.is_ok(), true);
+}
+```
+The above code will request a payment of 100 EUR from the customer with the phone number +242064818006.
+The customer will receive a prompt on their phone to confirm the payment.
+If the customer confirms the payment, the payment will be processed and the customer will receive a confirmation message.
+If the customer declines the payment, the payment will not be processed and the customer will receive a message informing them that the payment was declined.
+The request_to_pay method returns a Result<RequestToPayResponse, Box<dyn Error>>.
