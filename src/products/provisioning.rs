@@ -18,11 +18,7 @@ impl Provisioning {
         }
     }
 
-    /// .
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if .
+
     /*
         Used to create an API user in the sandbox target environment.
      */
@@ -32,7 +28,6 @@ impl Provisioning {
             provider_callback_host: "string".to_string()
         };
 
-        println!("provisioning: {:?}",serde_json::to_string(&provisioning)?);
         let res = client.post(format!("{}v1_0/apiuser", self.url))
         .header("X-Reference-Id", reference_id)
         .header("Content-Type", "application/json")
@@ -40,19 +35,18 @@ impl Provisioning {
         .body(serde_json::to_string(&provisioning)?)
         .send().await?;
 
-        let response = res.text().await?;
-        println!("response create_sandbox: {:?}", response);
-        Ok(())
+        if res.status().is_success() {
+            return Ok(());
+        }else{
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
-    /// .
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if .
+
     /*
         Used to get API user information.
      */
+    #[allow(dead_code)]
     pub async fn get_api_information(&self, reference_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let res = client.post(format!("{}/v1_0/apiuser/{}", self.url, reference_id))
@@ -63,9 +57,11 @@ impl Provisioning {
         .send().await?;
 
         
-        let response = res.text().await?;
-        println!("response get_api_information: {:?}", response);
-        Ok(())
+        if res.status().is_success() {
+            return Ok(());
+        }else{
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 
 
@@ -81,10 +77,14 @@ impl Provisioning {
         .body("")
         .send().await?;
 
-        let response = res.text().await?;
-        let api_key: ApiUserKeyResult = serde_json::from_str(&response)?;
-        println!("response create_api_information: {:?} {:?}", response, reference_id);
-        Ok(api_key)
+        if res.status().is_success() {
+            let response = res.text().await?;
+            let api_key: ApiUserKeyResult = serde_json::from_str(&response)?;
+            println!("response create_api_information: {:?} {:?}", response, reference_id);
+            Ok(api_key)
+        }else{
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
+        }
     }
 }
 

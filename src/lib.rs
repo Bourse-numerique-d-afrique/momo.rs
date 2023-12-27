@@ -58,7 +58,7 @@ mod enums;
 /// 
 ///    let payer : Party = Party {
 ///           party_id_type: "MSISDN".to_string(),
-///          party_id: "+242064818006".to_string(),
+///          party_id: "msisdn".to_string(),
 ///      };
 /// 
 ///   let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
@@ -66,7 +66,7 @@ mod enums;
 ///   assert_eq!(result.is_ok(), true);
 /// }
 /// ```
-/// The above code will request a payment of 100 EUR from the customer with the phone number +242064818006.
+/// The above code will request a payment of 100 EUR from the customer with the phone number "msisdn".
 /// The customer will receive a prompt on their phone to confirm the payment.
 /// If the customer confirms the payment, the payment will be processed and the customer will receive a confirmation message.
 /// If the customer declines the payment, the payment will not be processed and the customer will receive a message informing them that the payment was declined.

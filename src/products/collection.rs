@@ -206,6 +206,7 @@ impl Collection {
         This operation is used to get the status of an invoice. X-Reference-Id that was passed in the post is used as reference to the request
         @return InvoiceResult
      */
+    #[allow(dead_code)]
     async fn get_invoice_status(&self, invoice_id: String) -> Result<InvoiceResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
@@ -231,6 +232,7 @@ impl Collection {
         This operation is used to get the status of a Payment. X-Reference-Id that was passed in the post is used as reference to the request
         @return PaymentResult
      */
+    #[allow(dead_code)]
     async fn get_payment_status(&self, payment_id: String) -> Result<PaymentResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
@@ -251,16 +253,11 @@ impl Collection {
     }
 
 
-    /// .
-    /// Get the status of a pre-approval.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the request fails.
-    ///
+
     /*
     This operation is used to get the status of a pre-approval. X-Reference-Id that was passed in the post is used as reference to the request.
      */
+    #[allow(dead_code)]
     async fn get_pre_approval_status(&self, pre_approval_id: String) -> Result<PreApprovalResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
