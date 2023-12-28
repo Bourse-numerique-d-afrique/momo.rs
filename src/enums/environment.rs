@@ -20,6 +20,7 @@ pub enum Environment {
     MTNSWAZILAND,
     MTNGUINEACONAKRY,
     MTNSOUTHAFRICA,
+    Live,
 }
 
 
@@ -38,6 +39,7 @@ impl fmt::Display for Environment {
             Environment::MTNSWAZILAND => write!(f, "mtnswaziland"),
             Environment::MTNGUINEACONAKRY => write!(f, "mtnguineaconakry"),
             Environment::MTNSOUTHAFRICA => write!(f, "mtnsouthafrica"),
+            Environment::Live => write!(f, "live"),
         }
     }
 }

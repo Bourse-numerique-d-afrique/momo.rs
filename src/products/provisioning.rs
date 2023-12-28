@@ -4,16 +4,14 @@ use crate::{responses::api_user_key::ApiUserKeyResult, requests::provisioning::P
 
 
 pub struct Provisioning {
-    pub primary_key: String,
+    pub subscription_key: String,
     pub url: String,
 }
 
 impl Provisioning {
-    pub fn new(url: String) -> Self {
-        dotenv::dotenv().ok();
-        let primary_key = std::env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+    pub fn new(url: String, subscription_key: String) -> Self {
         Provisioning {
-            primary_key,
+            subscription_key,
             url
         }
     }
@@ -25,16 +23,17 @@ impl Provisioning {
     pub async fn create_sandox(&self, reference_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let provisioning = ProvisioningRequest{
-            provider_callback_host: "string".to_string()
+            provider_callback_host: "test".to_string()
         };
 
-        let res = client.post(format!("{}v1_0/apiuser", self.url))
+        let res = client.post(format!("{}/v1_0/apiuser", self.url))
         .header("X-Reference-Id", reference_id)
         .header("Content-Type", "application/json")
-        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .header("Ocp-Apim-Subscription-Key", &self.subscription_key)
         .body(serde_json::to_string(&provisioning)?)
         .send().await?;
 
+        println!("{:?}", res);
         if res.status().is_success() {
             return Ok(());
         }else{
@@ -49,11 +48,9 @@ impl Provisioning {
     #[allow(dead_code)]
     pub async fn get_api_information(&self, reference_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let res = client.post(format!("{}/v1_0/apiuser/{}", self.url, reference_id))
+        let res = client.get(format!("{}/v1_0/apiuser/{}", self.url, reference_id))
         .header("Cache-Control", "no-cache")
-        .header("Content-Length", "0")
-        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-        .body("")
+        .header("Ocp-Apim-Subscription-Key", &self.subscription_key)
         .send().await?;
 
         
@@ -72,7 +69,7 @@ impl Provisioning {
         let client = reqwest::Client::new();
         let res = client.post(format!("{}/v1_0/apiuser/{}/apikey",self.url, reference_id))
         .header("Cache-Control", "no-cache")
-        .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+        .header("Ocp-Apim-Subscription-Key", &self.subscription_key)
         .header("Content-Length", "0")
         .body("")
         .send().await?;
@@ -100,7 +97,8 @@ mod tests {
     async fn test_0() {
         dotenv().ok();
         let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
-        let provisioning = Provisioning::new(mtn_url);
+        let subscription_key = std::env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let provisioning = Provisioning::new(mtn_url, subscription_key);
         let reference_id = Uuid::new_v4().to_string();
         let result = provisioning.create_sandox(&reference_id).await;
         assert_eq!(result.is_ok(), true);

@@ -80,10 +80,13 @@ pub struct Momo {
 }
 
 impl Momo {
-    pub async fn new(url: String, api_user: String, environment: Environment, api_key: Option<String>) -> Result<Momo, Box<dyn Error>> {
+    pub async fn new(url: String, api_user: String, environment: Environment, api_key: Option<String>, subscription_key: Option<String>) -> Result<Momo, Box<dyn Error>> {
         dotenv::dotenv().ok();
         if environment == Environment::Sandbox {
-            let provisioning = Provisioning::new(url.clone());
+            if subscription_key.is_none() {
+                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "subscription_key is required for sandbox environment")));
+            }
+            let provisioning = Provisioning::new(url.clone(), subscription_key.unwrap());
             let _create_sandbox = provisioning.create_sandox(&api_user).await?;
             let api = provisioning.create_api_information(&api_user).await?;
             return Ok(
