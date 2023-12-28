@@ -260,7 +260,7 @@ impl Disbursements {
        Status of the transaction can be validated by using the GET /refund/{referenceId}
        @return Ok(())
     */
-    pub async fn refund_v1(&self, refund: Refund, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn refund_v1(&self, refund: Refund, _callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let refund_id = uuid::Uuid::new_v4().to_string();
         let access_token = self.get_valid_access_token().await?;
@@ -290,7 +290,7 @@ impl Disbursements {
        Status of the transaction can be validated by using the GET /refund/{referenceId}
        @return Ok(())
     */
-    pub async fn refund_v2(&self, refund: Refund, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn refund_v2(&self, refund: Refund, _callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let refund_id = uuid::Uuid::new_v4().to_string();
         let access_token = self.get_valid_access_token().await?;
@@ -526,7 +526,7 @@ impl MOMOAuthorization for Disbursements {
             }
     }
 
-    async fn bc_authorize(&self, msisdn: String, callback_url: Option<&str>) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
+    async fn bc_authorize(&self, msisdn: String, _callback_url: Option<&str>) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client

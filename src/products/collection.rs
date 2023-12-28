@@ -120,7 +120,7 @@ impl Collection {
         @return InvoiceDelete
     
      */
-    pub async fn cancel_invoice(&self, invoice_id: &str, callback_url: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn cancel_invoice(&self, invoice_id: &str, _callback_url: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client.delete(format!("{}/collection/v2_0/invoice/{}", self.url, invoice_id))
@@ -144,7 +144,7 @@ impl Collection {
         @return Ok(())
     
      */
-    pub async fn create_invoice(&self, invoice: InvoiceRequest, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn create_invoice(&self, invoice: InvoiceRequest, _callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/collection/v2_0/invoice", self.url))
@@ -173,7 +173,7 @@ impl Collection {
         Making it possible to perform payments via the partner gateway. This may be used to pay for external bills or to perform air-time top-ups.
         @return Ok(())
      */
-    pub async fn create_payments(&self, payment: CreatePayment, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn create_payments(&self, payment: CreatePayment, _callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/collection/v2_0/payment", self.url))
@@ -400,7 +400,7 @@ impl Collection {
 
     @return Ok(())
      */
-    pub async fn request_to_withdraw_v1(&self, request: RequestToPay, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn request_to_withdraw_v1(&self, request: RequestToPay, _callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/collection/v1_0/requesttowithdraw", self.url))
@@ -427,7 +427,7 @@ impl Collection {
     @return Ok(())
     
      */
-    pub async fn request_to_withdraw_v2(&self, request: RequestToPay, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn request_to_withdraw_v2(&self, request: RequestToPay, _callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/collection/v2_0/requesttowithdraw", self.url))
@@ -599,7 +599,7 @@ impl MOMOAuthorization for Collection {
         @return BCAuthorizeResponse
     
      */
-    async fn bc_authorize(&self, msisdn: String, callback_url: Option<&str>) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
+    async fn bc_authorize(&self, msisdn: String, _callback_url: Option<&str>) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/collection/v1_0/bc-authorize", self.url))
