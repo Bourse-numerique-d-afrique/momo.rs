@@ -42,3 +42,9 @@ impl From<InvoiceRequest> for Body {
         Body::from(serde_json::to_string(&invoice_request).unwrap())
     }
 }
+
+impl From<&InvoiceRequest> for Body {
+    fn from(invoice_request: &InvoiceRequest) -> Self {
+        Body::from(serde_json::to_string(invoice_request).unwrap())
+    }
+}

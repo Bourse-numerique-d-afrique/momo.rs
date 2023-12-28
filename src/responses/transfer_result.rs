@@ -5,15 +5,13 @@
 
 use serde::{Serialize, Deserialize};
 
-use crate::{structs::party::Party, errors::error::ErrorReason};
+use crate::structs::party::Party;
 
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TransferResult {
     pub amount : String,
     pub currency : String,
-    #[serde(rename = "financialTransactionId")]
-    pub financial_transaction_id : String,
     #[serde(rename = "externalId")]
     pub external_id : String,
     pub payee : Party,
@@ -22,5 +20,4 @@ pub struct TransferResult {
     #[serde(rename = "payeeNote")]
     pub payee_note : String,
     pub status : String,
-    pub reason : ErrorReason,
 }

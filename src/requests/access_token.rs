@@ -11,6 +11,7 @@ pub struct AccessTokenRequest{
 
 impl From<AccessTokenRequest> for Body{
     fn from(access_token_request: AccessTokenRequest) -> Self{
-        Body::from(serde_json::to_string(&access_token_request).unwrap())
+        let t =  format!("grant_type={}&auth_req_id={}", access_token_request.grant_type, access_token_request.auth_req_id);
+        Body::from(t)
     }
 }

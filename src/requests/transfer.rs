@@ -6,7 +6,7 @@ use reqwest::Body;
 
 use crate::structs::party::Party;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Transfer {
     pub amount : String,
     pub currency : String,
@@ -17,6 +17,21 @@ pub struct Transfer {
     pub payer_message : String,
     #[serde(rename = "payeeNote")]
     pub payee_note : String,
+}
+
+
+impl Transfer {
+    pub fn new(amount: String, currency: String, payee: Party, payer_message: String, payee_note: String) -> Self {
+        let external_id = uuid::Uuid::new_v4().to_string();
+        Transfer {
+            amount,
+            currency,
+            external_id,
+            payee,
+            payer_message,
+            payee_note
+        }
+    }
 }
 
 impl From<Transfer> for Body {

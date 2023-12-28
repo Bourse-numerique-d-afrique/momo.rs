@@ -11,10 +11,10 @@ pub trait MOMOAuthorization {
         This operation is used to claim a consent by the account holder for the requested scopes.
         @return OAuth2TokenResponse
      */
-    async fn create_o_auth_2_token(&self) -> Result<OAuth2TokenResponse, Box<dyn std::error::Error>>;
+    async fn create_o_auth_2_token(&self, auth_req_id: String) -> Result<OAuth2TokenResponse, Box<dyn std::error::Error>>;
     /*
     This operation is used to claim a consent by the account holder for the requested scopes.
     @return BCAuthorizeResponse
      */
-    async fn bc_authorize(&self, msisdn: String) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>>;
+    async fn bc_authorize(&self, msisdn: String, callback_url: Option<&str>) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>>;
 }

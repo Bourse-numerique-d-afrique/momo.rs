@@ -2,7 +2,7 @@
 
 use serde::{Serialize, Deserialize};
 
-use crate::{structs::party::Party, errors::error::ErrorReason};
+use crate::structs::party::Party;
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -19,5 +19,4 @@ pub struct  RefundResult {
     #[serde(rename = "payeeNote")]
     pub payee_note : String,
     pub status : String,
-    pub reason : ErrorReason,
 }

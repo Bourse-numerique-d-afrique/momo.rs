@@ -1,4 +1,4 @@
-use reqwest::Body;
+use std::fmt;
 use crate::enums::access_type::AccessType;
 use serde::{Serialize, Deserialize};
 
@@ -6,14 +6,19 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BcAuthorize {
-    pub login_hint: String,
     pub scope: String,
+    #[serde(rename = "login_hint")]
+    pub login_hint: String,
+    #[serde(rename = "access_type")]
     pub access_type: AccessType
 }
 
 
-impl From<BcAuthorize> for Body {
-    fn from(bc_authorize: BcAuthorize) -> Self {
-        Body::from(serde_json::to_string(&bc_authorize).unwrap())
+impl fmt::Display for BcAuthorize {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "scope={}&login_hint={}&access_type={}", self.scope, self.login_hint, match self.access_type {
+            AccessType::Offline => "offline",
+            AccessType::Online => "online",
+        })
     }
 }

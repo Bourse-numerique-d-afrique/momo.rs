@@ -1,5 +1,7 @@
 use serde::{Serialize, Deserialize};
 
+use crate::enums::party_id_type::PartyIdType;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Party {
     /*
@@ -9,7 +11,7 @@ pub struct Party {
         PARTY_CODE - UUID of the party. Validated with IsUuid
      */
     #[serde(rename = "partyIdType")]
-    pub party_id_type: String,
+    pub party_id_type: PartyIdType,
     #[serde(rename = "partyId")]
     pub party_id: String,
 }

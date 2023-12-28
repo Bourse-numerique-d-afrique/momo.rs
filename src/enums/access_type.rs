@@ -5,7 +5,9 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub enum AccessType {
+    #[serde(rename = "online")]
     Online,
+    #[serde(rename = "offline")]
     Offline,
 }
 

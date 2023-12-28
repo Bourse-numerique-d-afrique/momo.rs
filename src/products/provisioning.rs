@@ -80,7 +80,6 @@ impl Provisioning {
         if res.status().is_success() {
             let response = res.text().await?;
             let api_key: ApiUserKeyResult = serde_json::from_str(&response)?;
-            println!("response create_api_information: {:?} {:?}", response, reference_id);
             Ok(api_key)
         }else{
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))

@@ -2,7 +2,7 @@
 
 use serde::{Serialize, Deserialize};
 
-use crate::{errors::error::ErrorReason, structs::party::Party};
+use crate::structs::party::Party;
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -18,14 +18,8 @@ pub struct InvoiceResult {
     pub payment_reference: String,
     #[serde(rename = "invoiceId")]
     pub invoice_id: String,
-    #[serde(rename = "experyDateTime")]
+    #[serde(rename = "expiryDateTime")]
     pub expiry_date_time: String,
-    #[serde(rename = "payerFirstName")]
-    pub payee_first_name: String,
-    #[serde(rename = "payerLastName")]
-    pub payee_last_name: String,
-    #[serde(rename = "errorReason")]
-    pub error_reason: ErrorReason,
     #[serde(rename = "intendedPayer")]
     pub intended_payer: Party,
     pub description: String,
