@@ -14,7 +14,18 @@ jobs:
             rustup default nightly
 
       - name: test
-        run: cargo test
+        run: |
+          touch .env
+          echo MTN_URL=${{ secrets.MTN_URL }} >> .env
+          echo MTN_COLLECTION_PRIMARY_KEY=${{ secrets.MTN_COLLECTION_PRIMARY_KEY }} >> .env
+          echo MTN_COLLECTION_SECONDARY_KEY=${{ secrets.MTN_COLLECTION_SECONDARY_KEY }} >> .env
+          echo MTN_DISBURSEMENT_PRIMARY_KEY=${{ secrets.MTN_DISBURSEMENT_PRIMARY_KEY}} >> .env
+          echo MTN_DISBURSEMENT_SECONDARY_KEY=${{ secrets.MTN_DISBURSEMENT_SECONDARY_KEY}} >> .env
+          echo MTN_REMITTANCE_PRIMARY_KEY=${{ secrets.MTN_REMITTANCE_PRIMARY_KEY }} >> .env
+          echo MTN_REMITTANCE_SECONDARY_KEY=${{ secrets.MTN_REMITTANCE_SECONDARY_KEY }} >> .env
+          echo MTN_API_USER=${{ secrets.MTN_API_USER}} >> .env
+          echo MTN_API_KEY=${{ secrets.MTN_API_KEY}} >> .env
+          cargo test
 
   release:
     needs: build
