@@ -7,13 +7,13 @@ use std::error::Error;
 use enums::environment::Environment;
 use products::{provisioning::Provisioning, collection::Collection, remittance::Remittance, disbursements::Disbursements};
 
-mod traits;
-mod structs;
-mod responses;
-mod errors;
-mod requests;
-mod products;
-mod enums;
+pub mod traits;
+pub mod structs;
+pub mod responses;
+pub mod errors;
+pub mod requests;
+pub mod products;
+pub mod enums;
 
 
 ///# MTN Mobile Money API
@@ -25,16 +25,16 @@ mod enums;
 /// how to use:
 /// ```
 /// use mtnmomo::Momo;
-/// use mtnmomo::Environment;
+/// use mtnmomo::enums::environment::Environment;
 /// use uuid::Uuid;
 /// 
 /// #[tokio::main]
 /// async fn main() {
-///    let api_user = Uuid::new_v4().to_string();
-///    let api_key = Uuid::new_v4().to_string();
-///    let mtn_url = "https://sandbox.momodeveloper.mtn.com";
-///    let momo = Momo::new(mtn_url.to_string(), api_user, Environment::Sandbox, None).await.unwrap();
-///    let collection = momo.collection(api_user, api_key);
+///   let primary_subscription_key = Uuid::new_v4().to_string();
+///   let secondary_subscription_key = Uuid::new_v4().to_string();
+///   let mtn_url = "https://sandbox.momodeveloper.mtn.com";
+///   let momo = Momo::new_with_provisioning(mtn_url.to_string(), primary_subscription_key.clone()).await.unwrap();
+///   let collection = momo.collection(primary_subscription_key, secondary_subscription_key);
 /// }
 /// 
 ///```
@@ -43,21 +43,23 @@ mod enums;
 /// For example, to request a payment from a customer, you can use the request_to_pay method of the Collection product.
 /// ```
 /// use mtnmomo::Momo;
-/// use mtnmomo::Environment;
+/// use mtnmomo::enums::environment::Environment;
 /// use uuid::Uuid;
 /// use mtnmomo::structs::party::Party;
+/// use mtnmomo::enums::party_id_type::PartyIdType;
+/// use mtnmomo::enums::currency::Currency;
 /// use mtnmomo::requests::request_to_pay::RequestToPay;
 /// 
 /// #[tokio::main]
 /// async fn main() {
-///   let api_user = Uuid::new_v4().to_string();
-///   let api_key = Uuid::new_v4().to_string();
+///   let primary_subscription_key = Uuid::new_v4().to_string();
+///   let secondary_subscription_key = Uuid::new_v4().to_string();
 ///   let mtn_url = "https://sandbox.momodeveloper.mtn.com";
-///   let momo = Momo::new(mtn_url.to_string(), api_user, Environment::Sandbox, None).await.unwrap();
-///   let collection = momo.collection(api_user, api_key);
+///   let momo = Momo::new_with_provisioning(mtn_url.to_string(), primary_subscription_key.clone()).await.unwrap();
+///   let collection = momo.collection(primary_subscription_key, secondary_subscription_key);
 /// 
 ///    let payer : Party = Party {
-///           party_id_type: "MSISDN".to_string(),
+///           party_id_type: PartyIdType::MSISDN,
 ///          party_id: "msisdn".to_string(),
 ///      };
 /// 
@@ -79,36 +81,32 @@ pub struct Momo {
     pub api_key: String,
 }
 
+
+
+
 impl Momo {
-    pub async fn new(url: String, api_user: String, environment: Environment, api_key: Option<String>, subscription_key: Option<String>) -> Result<Momo, Box<dyn Error>> {
-        dotenv::dotenv().ok();
-        if environment == Environment::Sandbox {
-            if subscription_key.is_none() {
-                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "subscription_key is required for sandbox environment")));
-            }
-            let provisioning = Provisioning::new(url.clone(), subscription_key.unwrap());
-            let _create_sandbox = provisioning.create_sandox(&api_user).await?;
-            let api = provisioning.create_api_information(&api_user).await?;
-            return Ok(
-                Momo{
-                    url,
-                    environment,
-                    api_user,
-                    api_key: api.api_key,
-                }
-            )
+    pub async fn new(url: String, api_user: String, environment: Environment, api_key: Option<String>) -> Self {
+        Momo{
+            url,
+            environment,
+            api_user,
+            api_key: api_key.unwrap(),
         }
-        if api_key.is_none() {
-            return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "api_key is required for production environment")));
-        }
-       Ok(
-            Momo{
+       
+    }
+
+    pub async fn new_with_provisioning(url: String, subscription_key: String) -> Result<Momo, Box<dyn Error>> {
+        let provisioning = Provisioning::new(url.clone(), subscription_key.clone());
+        let _create_sandbox = provisioning.create_sandox(&subscription_key).await?;
+        let api = provisioning.create_api_information(&subscription_key).await?;
+        return 
+            Ok(Momo{
                 url,
-                environment,
-                api_user,
-                api_key: api_key.unwrap(),
-            }
-       )
+                environment: Environment::Sandbox,
+                api_user: subscription_key,
+                api_key: api.api_key,
+            })
+        
     }
 
 

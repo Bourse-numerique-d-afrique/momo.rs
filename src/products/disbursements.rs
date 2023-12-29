@@ -6,15 +6,10 @@ use crate::{
         bcauthorize_response::BCAuthorizeResponse, oauth2tokenresponse::OAuth2TokenResponse,
         token_response::TokenResponse, transfer_result::TransferResult, refund_result::RefundResult,
     },
-    traits::{account::Account, auth::MOMOAuthorization},
+    traits::{account::Account, auth::MOMOAuthorization}, structs::balance::Balance,
 };
 
-use chrono::{Utc, DateTime, NaiveDateTime};
-use rusqlite::{params, Connection, Result};
 
-use crate::structs::balance::Balance;
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
 
 pub struct Disbursements {
     pub url: String,
@@ -23,7 +18,6 @@ pub struct Disbursements {
     pub environment: Environment,
     pub api_user: String,
     pub api_key: String,
-    pub conn_pool: Pool<SqliteConnectionManager>,
 }
 
 impl Disbursements {
@@ -34,19 +28,6 @@ impl Disbursements {
        @return Disbursements
     */
     pub fn new(url: String, environment: Environment, api_user: String, api_key: String, primary_key: String, secondary_key: String) -> Disbursements {
-        let conn = Connection::open("disbursement_access_tokens.db").unwrap();
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS access_tokens (
-                id INTEGER PRIMARY KEY,
-                access_token TEXT NOT NULL,
-                token_type TEXT NOT NULL,
-                expires_in INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )",
-            params![],
-        ).unwrap();
-        let manager = SqliteConnectionManager::file("disbursement_access_tokens.db");
-        let pool = r2d2::Pool::new(manager).expect("Failed to create pool.");
         Disbursements {
             url,
             primary_key,
@@ -54,58 +35,17 @@ impl Disbursements {
             environment,
             api_key,
             api_user,
-            conn_pool: pool,
         }
     }
 
-        /*
-        This operation is used to insert an access token into the database
-        @return Ok(())
-     */
-    fn insert_access_token(&self, access_token: &str, token_type: &str, expires_in: i32) -> Result<(), Box<dyn std::error::Error>> {
-        let conn = self.conn_pool.get()?;
-        conn.execute(
-            "INSERT INTO access_tokens (access_token, token_type, expires_in) VALUES (?1, ?2, ?3)",
-            params![access_token, token_type, expires_in],
-        )?;
-
-        Ok(())
-    }
 
     /*
         This operation is used to get the latest access token from the database
         @return TokenResponse
      */
     async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
-        let conn = self.conn_pool.get()?;
-        let mut stmt = conn.prepare("SELECT * FROM access_tokens ORDER BY created_at DESC LIMIT 1")?;
-        let access_result = stmt.query(params![]);
-        let mut access = access_result.unwrap();
-        let r = access.next().unwrap();
-        if r.is_some() {
-            let row = r.unwrap();
-            let created_at: String = row.get(4)?;
-            let naive_datetime = NaiveDateTime::parse_from_str(&created_at, "%Y-%m-%d %H:%M:%S")?;
-            let date_time: DateTime<Utc> = DateTime::from_naive_utc_and_offset(naive_datetime, Utc);
-            let now = Utc::now();
-            let duration = now.signed_duration_since(date_time);
-            let duration = duration.num_seconds();
-            if duration > 3600 {
-                let token: TokenResponse = self.create_access_token().await?;
-                return Ok(token);
-            }else{
-                let token = TokenResponse{
-                    access_token: row.get(1)?,
-                    token_type: row.get(2)?,
-                    expires_in: row.get(3)?,
-                };
-                return Ok(token);
-            }
-        }else{
-            let token: TokenResponse = self.create_access_token().await?;
-            return Ok(token);
-        }
-        
+        let token: TokenResponse = self.create_access_token().await?;
+        return Ok(token);
     }
 
     /*
@@ -491,7 +431,6 @@ impl MOMOAuthorization for Disbursements {
         if res.status().is_success() {
             let body = res.text().await?;
             let token_response: TokenResponse = serde_json::from_str(&body)?;
-            self.insert_access_token(&token_response.access_token, &token_response.token_type, token_response.expires_in)?;
             Ok(token_response)
         } else {
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))

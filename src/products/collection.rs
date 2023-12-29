@@ -13,10 +13,6 @@ use crate::{traits::{account::Account, auth::MOMOAuthorization},
              enums::{environment::Environment, access_type::AccessType}};
 
 use crate::structs::balance::Balance;
-use rusqlite::{params, Connection, Result};
-use chrono::{DateTime, Utc, NaiveDateTime};
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
 
 
 /// # Collection
@@ -29,26 +25,11 @@ pub struct Collection {
     pub environment: Environment,
     pub api_user: String,
     pub api_key: String,
-    pub conn_pool: Pool<SqliteConnectionManager>,
 }
 
 
 impl Collection {
     pub fn new(url: String, environment: Environment, api_user: String, api_key: String, primary_key: String, secondary_key: String) -> Collection {
-        let conn = Connection::open("collection_access_tokens.db").unwrap();
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS access_tokens (
-                id INTEGER PRIMARY KEY,
-                access_token TEXT NOT NULL,
-                token_type TEXT NOT NULL,
-                expires_in INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )",
-            params![],
-        ).unwrap();
-
-        let manager = SqliteConnectionManager::file("collection_access_tokens.db");
-        let pool = r2d2::Pool::new(manager).expect("Failed to create pool.");
 
         Collection {
             url,
@@ -57,60 +38,18 @@ impl Collection {
             environment,
             api_user,
             api_key,
-            conn_pool: pool,
         }
     }
 
-    /*
-        This operation is used to insert an access token into the database
-        @param access_token
-        @param token_type
-        @param expires_in
-        @return Ok(())
-     */
-    fn insert_access_token(&self, access_token: &str, token_type: &str, expires_in: i32) -> Result<(), Box<dyn std::error::Error>> {
-        let conn = self.conn_pool.get()?;
-        conn.execute( 
-            "INSERT INTO access_tokens (access_token, token_type, expires_in) VALUES (?1, ?2, ?3)",
-            params![access_token, token_type, expires_in],
-        )?;
-        Ok(())
-    }
+
 
     /*
         This operation is used to get the latest access token from the database
         @return TokenResponse
      */
     async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
-        let conn = self.conn_pool.get()?;
-        let mut stmt = conn.prepare("SELECT * FROM access_tokens ORDER BY created_at DESC LIMIT 1")?;
-        let access_result = stmt.query(params![]);
-        let mut access = access_result.unwrap();
-        let r = access.next().unwrap();
-        if r.is_some() {
-            let row = r.unwrap();
-            let created_at: String = row.get(4)?;
-            let naive_datetime = NaiveDateTime::parse_from_str(&created_at, "%Y-%m-%d %H:%M:%S")?;
-            let date_time: DateTime<Utc> = DateTime::from_naive_utc_and_offset(naive_datetime, Utc);
-            let now = Utc::now();
-            let duration = now.signed_duration_since(date_time);
-            let duration = duration.num_seconds();
-            if duration > 3600 {
-                let token: TokenResponse = self.create_access_token().await?;
-                return Ok(token);
-            }else{
-                let token = TokenResponse{
-                    access_token: row.get(1)?,
-                    token_type: row.get(2)?,
-                    expires_in: row.get(3)?,
-                };
-                return Ok(token);
-            }
-        }else{
-            let token: TokenResponse = self.create_access_token().await?;
-            return Ok(token);
-        }
-        
+        let token: TokenResponse = self.create_access_token().await?;
+        return Ok(token);
     }
 
 
@@ -561,7 +500,6 @@ impl MOMOAuthorization for Collection {
         if res.status().is_success() {
             let body = res.text().await?;
             let token_response: TokenResponse = serde_json::from_str(&body)?;
-            self.insert_access_token(&token_response.access_token, &token_response.token_type, token_response.expires_in)?;
             Ok(token_response)
         }else {
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
@@ -621,7 +559,7 @@ impl MOMOAuthorization for Collection {
 }
 
 
-#[cfg(test)]
+#[cfg(test)] 
 mod tests {
     use super::*;
     use crate::enums::currency::Currency;
@@ -678,7 +616,6 @@ mod tests {
         let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
         let res = collection.request_to_pay(request).await;
         assert!(res.is_ok());
-        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -703,7 +640,6 @@ mod tests {
 
         let status = collection.request_to_pay_transaction_status(&res).await.expect("Error getting payment status");
         assert_eq!(status.status, "SUCCESSFUL");
-        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -728,7 +664,6 @@ mod tests {
 
         let notifcation_result = collection.request_to_pay_delivery_notification(&res, DeliveryNotification{notification_message: "test_notification_message".to_string()}).await;
         assert!(notifcation_result.is_ok());
-        drop(collection.conn_pool);
 
     }
 
@@ -763,7 +698,6 @@ mod tests {
         assert!(bc_authorize_res.is_ok());
         let res = collection.create_o_auth_2_token(bc_authorize_res.unwrap().auth_req_id).await.expect("Error creating o auth 2 token");
         assert_ne!(res.access_token.len(), 0);
-        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -783,7 +717,6 @@ mod tests {
         assert_ne!(res.access_token.len(), 0);
         let res = collection.get_user_info_with_consent(res.access_token).await.expect("Error getting user info with consent");
         assert_ne!(res.family_name.len(), 0);
-        drop(collection.conn_pool);
     }
 
 
@@ -801,7 +734,7 @@ mod tests {
         if res.is_ok() {
             assert_ne!(res.unwrap().available_balance.len(), 0);
         }
-        drop(collection.conn_pool);
+
     }
 
 
@@ -817,7 +750,6 @@ mod tests {
     //     let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
     //     let res = collection.get_account_balance_in_specific_currency(Currency::XAF.to_string()).await.expect("Error getting account balance");
     //     assert_ne!(res.available_balance.len(), 0);
-    //     drop(collection.conn_pool);
     // }
 
     #[tokio::test]
@@ -833,7 +765,6 @@ mod tests {
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
         let res = collection.get_basic_user_info("256774290781").await.expect("Error getting basic user info");
         assert_ne!(res.given_name.len(), 0);
-        drop(collection.conn_pool);
     }
 
 
@@ -862,7 +793,6 @@ mod tests {
 
         let res = collection.get_invoice_status(invoice_id).await.expect("Error getting invoice status");
         assert_eq!(res.status, "SUCCESSFUL".to_string());
-        drop(collection.conn_pool);
     }
 
 
@@ -888,7 +818,6 @@ mod tests {
         if res.is_ok() {
             assert!(true);
         }
-        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -914,7 +843,6 @@ mod tests {
             let res = collection.get_pre_approval_status(res.unwrap()).await.expect("Error getting pre approval status");
             assert_ne!(res.status.len(), 0);
         }
-        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -944,7 +872,6 @@ mod tests {
         );
         let res = collection.create_payments(payment, None).await.expect("Error creating payment");
         assert_ne!(res.len(), 0);
-        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -978,7 +905,6 @@ mod tests {
         let payment_id = collection.create_payments(payment, None).await.expect("Error creating payment");
         let res = collection.get_payment_status(payment_id).await.expect("Error getting payment status");
         assert_eq!(res.status, "SUCCESSFUL");
-        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -1002,7 +928,6 @@ mod tests {
         let request = RequestToPay::new("100.0".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
         let res = collection.request_to_withdraw_v1(request, None).await.expect("Error requesting to withdraw");
         assert_ne!(res.len(), 0);
-        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -1026,7 +951,6 @@ mod tests {
         let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
         let res = collection.request_to_withdraw_v2(request, None).await.expect("Error requesting to withdraw");
         assert_ne!(res.len(), 0);
-        drop(collection.conn_pool);
     }
 
     #[tokio::test]
@@ -1051,7 +975,6 @@ mod tests {
         let withdraw_id = collection.request_to_withdraw_v2(request, None).await.expect("Error requesting to withdraw");
         let res = collection.request_to_withdraw_transaction_status(&withdraw_id).await.expect("Error getting request to withdraw status");
         assert_eq!(res.status, "SUCCESSFUL");
-        drop(collection.conn_pool);
     }
 
     #[tokio::test] 
@@ -1070,6 +993,5 @@ mod tests {
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
         let res = collection.validate_account_holder_status("256774290781", "MSISDN").await;
         assert!(res.is_ok());
-        drop(collection.conn_pool);
     }
 }
