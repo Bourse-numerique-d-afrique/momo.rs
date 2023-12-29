@@ -1,3 +1,14 @@
+//! Provisioning for sandbox
+//! 
+//! 
+//! 
+//! 
+//! 
+//! 
+//! 
+//! 
+//! 
+
 use crate::{responses::api_user_key::ApiUserKeyResult, requests::provisioning::ProvisioningRequest};
 
 
@@ -32,8 +43,7 @@ impl Provisioning {
         .header("Ocp-Apim-Subscription-Key", &self.subscription_key)
         .body(serde_json::to_string(&provisioning)?)
         .send().await?;
-
-        println!("{:?}", res);
+    
         if res.status().is_success() {
             return Ok(());
         }else{

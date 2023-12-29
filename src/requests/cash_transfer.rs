@@ -1,5 +1,7 @@
-
+#[doc(hidden)]
 use reqwest::Body;
+
+#[doc(hidden)]
 use serde::{Serialize, Deserialize};
 
 use crate::{structs::party::Party, enums::{currency::Currency, payer_identification_type::PayerIdentificationType}};

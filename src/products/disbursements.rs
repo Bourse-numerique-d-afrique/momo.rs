@@ -1,3 +1,16 @@
+//! Disbursements Product
+//! 
+//! 
+//! 
+//! 
+//! 
+//! 
+//! 
+//! 
+//! 
+
+use std::sync::Arc;
+
 use crate::{
     enums::{environment::Environment, access_type::AccessType},
     requests::{refund::Refund, transfer::Transfer, bc_authorize::BcAuthorize, access_token::AccessTokenRequest},
@@ -9,6 +22,11 @@ use crate::{
     traits::{account::Account, auth::MOMOAuthorization}, structs::balance::Balance,
 };
 
+use chrono::Utc;
+use once_cell::sync::Lazy;
+use tokio::sync::Mutex;
+use tokio::task;
+
 
 
 pub struct Disbursements {
@@ -19,6 +37,11 @@ pub struct Disbursements {
     pub api_user: String,
     pub api_key: String,
 }
+
+static ACCESS_TOKEN: Lazy<Arc<Mutex<Option<TokenResponse>>>> = Lazy::new(|| {
+    Arc::new(Mutex::new(None))
+});
+
 
 impl Disbursements {
     /*
@@ -44,6 +67,21 @@ impl Disbursements {
         @return TokenResponse
      */
     async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
+        let token = ACCESS_TOKEN.lock().await;
+        if token.is_some() {
+            let token = token.clone().unwrap();
+            if token.created_at.is_some() {
+                let created_at = token.created_at.unwrap();
+                let expires_in = token.expires_in;
+                let now = Utc::now();
+                let duration = now.signed_duration_since(created_at);
+                if duration.num_seconds() < expires_in as i64 {
+                    return Ok(token);
+                }
+                let token: TokenResponse = self.create_access_token().await?;
+                return Ok(token);
+            }
+        }
         let token: TokenResponse = self.create_access_token().await?;
         return Ok(token);
     }
@@ -431,7 +469,12 @@ impl MOMOAuthorization for Disbursements {
         if res.status().is_success() {
             let body = res.text().await?;
             let token_response: TokenResponse = serde_json::from_str(&body)?;
-            Ok(token_response)
+            let cloned = token_response.clone();
+            let _t = task::spawn(async move {
+                let mut token = ACCESS_TOKEN.lock().await;
+                *token = Some(token_response.clone());
+            });
+            Ok(cloned)
         } else {
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
         }

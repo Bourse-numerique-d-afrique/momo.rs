@@ -1,3 +1,4 @@
+#[doc(hidden)]
 use serde::{Serialize, Deserialize};
 
 use crate::enums::party_id_type::PartyIdType;

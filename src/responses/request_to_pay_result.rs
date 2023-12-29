@@ -1,6 +1,6 @@
 
 
-
+#[doc(hidden)]
 use serde::{Serialize, Deserialize};
 use crate:: structs::party::Party;
 

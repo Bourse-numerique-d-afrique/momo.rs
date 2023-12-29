@@ -1,7 +1,9 @@
 
 
-
+#[doc(hidden)]
 use serde::{Serialize, Deserialize};
+
+#[doc(hidden)]
 use reqwest::Body;
 
 use crate::structs::party::Party;

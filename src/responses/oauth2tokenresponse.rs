@@ -1,4 +1,4 @@
-
+#[doc(hidden)]
 use serde::{Serialize, Deserialize};
 
 
