@@ -347,7 +347,7 @@ impl MOMOAuthorization for Remittance {
 
 #[cfg(test)]
 mod tests {
-    use crate::{enums::{environment::Environment, party_id_type::PartyIdType}, products::remittance::Remittance, traits::{account::Account, auth::MOMOAuthorization}, requests::transfer::Transfer, structs::party::Party};
+    use crate::{enums::{environment::Environment, party_id_type::PartyIdType, currency::Currency}, products::remittance::Remittance, traits::{account::Account, auth::MOMOAuthorization}, requests::transfer::Transfer, structs::party::Party};
     use dotenv::dotenv;
     use std::env;
 
@@ -396,7 +396,7 @@ mod tests {
         let api_user = env::var("MTN_API_USER").expect("MTN_API_USER not set");
         let api_key = env::var("MTN_API_KEY").expect("MTN_API_KEY not set");
         let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        let transfer = Transfer::new("100".to_string(), "EUR".to_string(), Party {
+        let transfer = Transfer::new("100".to_string(), Currency::EUR, Party {
             party_id_type: PartyIdType::MSISDN,
             party_id: "256774290781".to_string(),
         }, "payer_message".to_string(), "payee_note".to_string());
@@ -415,7 +415,7 @@ mod tests {
         let api_user = env::var("MTN_API_USER").expect("MTN_API_USER not set");
         let api_key = env::var("MTN_API_KEY").expect("MTN_API_KEY not set");
         let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        let transfer = Transfer::new("100".to_string(), "EUR".to_string(), Party {
+        let transfer = Transfer::new("100".to_string(), Currency::EUR, Party {
             party_id_type: PartyIdType::MSISDN,
             party_id: "256774290781".to_string(),
         }, "payer_message".to_string(), "payee_note".to_string());
@@ -468,7 +468,7 @@ mod tests {
         let  balance_result= remittance.get_account_balance().await;
         if balance_result.is_ok() {
             assert!(balance_result.is_ok());
-            assert_eq!(balance_result.unwrap().currency, "EUR".to_string());
+            assert_eq!(balance_result.unwrap().currency, Currency::EUR);
         }
         
     }

@@ -559,7 +559,7 @@ mod tests {
         let balance_result = disbursements.get_account_balance().await;
         if balance_result.is_ok() {
             let balance = balance_result.unwrap();
-            assert_eq!(balance.currency, "EUR");
+            assert_eq!(balance.currency, Currency::EUR);
         }
     }
 
@@ -579,7 +579,7 @@ mod tests {
         let balance_result = disbursements.get_account_balance_in_specific_currency("EUR".to_string()).await;
         if balance_result.is_ok() {
             let balance = balance_result.unwrap();
-            assert_eq!(balance.currency, "EUR");
+            assert_eq!(balance.currency, Currency::EUR);
         }
     }
 
@@ -697,7 +697,7 @@ mod tests {
             party_id_type: PartyIdType::MSISDN,
             party_id: "256774290781".to_string(),
         };
-        let transfer = Transfer::new("100".to_string(), "EUR".to_string(), payee, "payer_message".to_string(), "payee_note".to_string());
+        let transfer = Transfer::new("100".to_string(), Currency::EUR, payee, "payer_message".to_string(), "payee_note".to_string());
         let result = disbursements.deposit_v1(transfer.clone()).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), transfer.external_id);
@@ -719,7 +719,7 @@ mod tests {
                 party_id_type: PartyIdType::MSISDN,
                 party_id: "256774290781".to_string(),
             };
-            let transfer = Transfer::new("100".to_string(), "EUR".to_string(), payee, "payer_message".to_string(), "payee_note".to_string());
+            let transfer = Transfer::new("100".to_string(), Currency::EUR, payee, "payer_message".to_string(), "payee_note".to_string());
             let result = disbursements.deposit_v1(transfer.clone()).await;
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), transfer.external_id);
@@ -742,7 +742,7 @@ mod tests {
             party_id_type: PartyIdType::MSISDN,
             party_id: "256774290781".to_string(),
         };
-        let transfer = Transfer::new("100".to_string(), "EUR".to_string(), payee, "payer_message".to_string(), "payee_note".to_string());
+        let transfer = Transfer::new("100".to_string(), Currency::EUR, payee, "payer_message".to_string(), "payee_note".to_string());
         let result = disbursements.deposit_v1(transfer.clone()).await;
         assert!(result.is_ok());
         let status_result = disbursements.get_deposit_status(result.unwrap()).await;
@@ -868,7 +868,7 @@ mod tests {
             mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
         );
 
-        let transfer = Transfer::new("100".to_string(), "EUR".to_string(), Party {
+        let transfer = Transfer::new("100".to_string(), Currency::EUR, Party {
             party_id_type: PartyIdType::MSISDN,
             party_id: "256774290781".to_string(),
         }, "payer_message".to_string(), "payee_note".to_string());
@@ -892,7 +892,7 @@ mod tests {
 
 
 
-        let transfer = Transfer::new("100".to_string(), "EUR".to_string(), Party {
+        let transfer = Transfer::new("100".to_string(), Currency::EUR, Party {
             party_id_type: PartyIdType::MSISDN,
             party_id: "256774290781".to_string(),
         }, "payer_message".to_string(), "payee_note".to_string());

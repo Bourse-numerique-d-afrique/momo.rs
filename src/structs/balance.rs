@@ -2,9 +2,11 @@
 #[doc(hidden)]
 use serde::{Serialize, Deserialize};
 
+use crate::enums::currency::Currency;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Balance {
     #[serde(rename = "availableBalance")] // The available balance of the account
     pub available_balance: String, // The available balance of the account
-    pub currency: String, // ISO4217 Currency
+    pub currency: Currency, // ISO4217 Currency
 }

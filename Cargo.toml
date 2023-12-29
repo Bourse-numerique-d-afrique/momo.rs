@@ -3,12 +3,12 @@ name = "mtnmomo"
 version = "0.1.0"
 edition = "2021"
 authors = ["ONDONDA Prince Merveil @princefr"]
-description = "A simple package to manage your momo transactions"
+description = "MTN Momo Payment API for Rust, with support for both the Sandbox and Production environments. All products are supported: Collections, Disbursements and Remittances."
 license = "MIT"
 repository = "https://github.com/Bourse-numerique-d-afrique/momo.rs"
-#readme = "README.md"
+readme = "readme.md"
 #homepage = ""
-#documentation = "https://docs.rs/momo"
+documentation = "https://docs.rs/mtnmomo/0.1.0/mtnmomo/"
 keywords = ["momo", "money", "africa", "payment", "mtn"]
 # categories = ["cli", "money", "africa", "bourse numerique d'afrique", "mtn"]
 
