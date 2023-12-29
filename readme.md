@@ -27,18 +27,21 @@ This package provides for an easy way to connect to MTN MoMo API, it provides fo
 - Provisioning in case of sandbox environment
 
 ### how to use:
-```rust
+ ``` rust
 use mtnmomo::Momo;
-use mtnmomo::Environment;
+use mtnmomo::enums::environment::Environment;
 use uuid::Uuid;
+use dotenv::dotenv;
+use std::env;
 
 #[tokio::main]
 async fn main() {
-   let api_user = Uuid::new_v4().to_string();
-   let api_key = Uuid::new_v4().to_string();
-   let mtn_url = "https://sandbox.momodeveloper.mtn.com";
-   let momo = Momo::new(mtn_url.to_string(), api_user, Environment::Sandbox, None).await.unwrap();
-   let collection = momo.collection(api_user, api_key);
+dotenv().ok();
+let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set"); // https://sandbox.momodeveloper.mtn.com
+let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+let momo = Momo::new_with_provisioning(mtn_url, primary_key.clone()).await.unwrap();
+let collection = momo.collection(primary_key, secondary_key);
 }
 
 ```
@@ -46,29 +49,33 @@ After initializing the Momo struct, you can then use the collection, disbursemen
 The products have methods that you can use to interact with the API.
 For example, to request a payment from a customer, you can use the request_to_pay method of the Collection product.
 
-```rust
+``` rust
 use mtnmomo::Momo;
-use mtnmomo::Environment;
+use mtnmomo::enums::environment::Environment;
 use uuid::Uuid;
 use mtnmomo::structs::party::Party;
+use mtnmomo::enums::party_id_type::PartyIdType;
+use mtnmomo::enums::currency::Currency;
 use mtnmomo::requests::request_to_pay::RequestToPay;
+use dotenv::dotenv;
+use std::env;
 
 #[tokio::main]
 async fn main() {
-  let api_user = Uuid::new_v4().to_string();
-  let api_key = Uuid::new_v4().to_string();
-  let mtn_url = "https://sandbox.momodeveloper.mtn.com";
-  let momo = Momo::new(mtn_url.to_string(), api_user, Environment::Sandbox, None).await.unwrap();
-  let collection = momo.collection(api_user, api_key);
+  dotenv().ok();
+  let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set"); // https://sandbox.momodeveloper.mtn.com
+  let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+  let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+  let momo = Momo::new_with_provisioning(mtn_url, primary_key.clone()).await.unwrap();
+  let collection = momo.collection(primary_key, secondary_key);
 
    let payer : Party = Party {
-          party_id_type: "MSISDN".to_string(),
-         party_id: "msisdn".to_string(),
+          party_id_type: PartyIdType::MSISDN,
+         party_id: "234553".to_string(),
      };
 
   let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
   let result = collection.request_to_pay(request).await;
-  assert_eq!(result.is_ok(), true);
 }
 ```
 The above code will request a payment of 100 EUR from the customer with the phone number "msisdn".

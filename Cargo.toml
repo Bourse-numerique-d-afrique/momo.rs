@@ -9,8 +9,8 @@ repository = "https://github.com/Bourse-numerique-d-afrique/momo.rs"
 #readme = "README.md"
 #homepage = ""
 #documentation = "https://docs.rs/momo"
-keywords = ["momo", "mobile money", "africa", "bourse numerique d'afrique", "mtn"]
-categories = ["cli", "mobile money", "africa", "bourse numerique d'afrique", "mtn"]
+keywords = ["momo", "money", "africa", "payment", "mtn"]
+# categories = ["cli", "money", "africa", "bourse numerique d'afrique", "mtn"]
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
