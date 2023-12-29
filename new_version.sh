@@ -20,5 +20,5 @@ git commit -m "Bump version to $new_version"
 git tag $new_version
 
 # Push changes and tags to the repository
-git push origin main  # Change 'main' to your branch name if it's different
+git push origin master  # Change 'main' to your branch name if it's different
 git push origin $new_version

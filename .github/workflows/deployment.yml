@@ -27,13 +27,13 @@ jobs:
           echo MTN_API_KEY=${{ secrets.MTN_API_KEY}} >> .env
           cargo test
 
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Create Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          tag=$(git describe --tags --abbrev=0)
-          gh release create $tag ./target/release/*
+  # release:
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Create Release
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       run: |
+  #         tag=$(git describe --tags --abbrev=0)
+  #         gh release create $tag ./target/release/*
