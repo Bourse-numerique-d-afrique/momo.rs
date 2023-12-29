@@ -49,6 +49,12 @@ After initializing the Momo struct, you can then use the collection, disbursemen
 The products have methods that you can use to interact with the API.
 For example, to request a payment from a customer, you can use the request_to_pay method of the Collection product.
 
+
+### important notes:
+`mtnmomo::Momo::new_with_provisioning` is used to initialize the Momo struct with the sandbox environment.
+`mtnmomo::Momo::new` is used to initialize the Momo struct with the production environment.
+
+### example making a request to pay:
 ``` rust
 use mtnmomo::Momo;
 use mtnmomo::enums::environment::Environment;
@@ -78,8 +84,7 @@ async fn main() {
   let result = collection.request_to_pay(request).await;
 }
 ```
-The above code will request a payment of 100 EUR from the customer with the phone number "msisdn".
+The above code will request a payment of 100 EUR from the customer with the phone number "234553".
 The customer will receive a prompt on their phone to confirm the payment.
 If the customer confirms the payment, the payment will be processed and the customer will receive a confirmation message.
 If the customer declines the payment, the payment will not be processed and the customer will receive a message informing them that the payment was declined.
-The request_to_pay method returns a Result<RequestToPayResponse, Box<dyn Error>>.

@@ -27,7 +27,18 @@
 //! After initializing the Momo struct, you can then use the collection, disbursement or remittance methods to initialize the respective products.
 //! The products have methods that you can use to interact with the API.
 //! For example, to request a payment from a customer, you can use the request_to_pay method of the Collection product.
-//! # Examples
+//! 
+//! # Important notes
+//! `mtnmomo::Momo::new_with_provisioning` is used to initialize the Momo struct with the sandbox environment.
+//! 
+//! `mtnmomo::Momo::new` is used to initialize the Momo struct with the production environment.
+//! 
+//! 
+//! 
+//! # Examples:
+//!
+//! If you want to request a payment from a customer, you can use the request_to_pay method of the Collection product.
+//! 
 //! ```
 //! use mtnmomo::Momo;
 //! use mtnmomo::enums::environment::Environment;
