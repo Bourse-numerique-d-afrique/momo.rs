@@ -99,17 +99,24 @@ impl Collection {
         @return InvoiceDelete
     
      */
-    pub async fn cancel_invoice(&self, invoice_id: &str, _callback_url: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn cancel_invoice(&self, invoice_id: &str, callback_url: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
-        let res = client.delete(format!("{}/collection/v2_0/invoice/{}", self.url, invoice_id))
+        let mut req = client.delete(format!("{}/collection/v2_0/invoice/{}", self.url, invoice_id))
         .bearer_auth(access_token.access_token)
         .header("Content-Type", "application/json")
         .header("X-Target-Environment", self.environment.to_string())
         .header("X-Reference-Id", uuid::Uuid::new_v4().to_string())
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-        .body(InvoiceDelete{external_id: invoice_id.to_string()})
-        .send().await?;
+        .body(InvoiceDelete{external_id: invoice_id.to_string()});
+
+        if let Some(callback_url) = callback_url {
+            if !callback_url.is_empty() {
+                req = req.header("X-Callback-Url", callback_url);
+            }
+        }
+        
+        let res = req.send().await?;
 
         if res.status().is_success() {
             Ok(())
@@ -123,18 +130,27 @@ impl Collection {
         @return Ok(())
     
      */
-    pub async fn create_invoice(&self, invoice: InvoiceRequest, _callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn create_invoice(&self, invoice: InvoiceRequest, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
-        let res = client.post(format!("{}/collection/v2_0/invoice", self.url))
+        let mut req = client.post(format!("{}/collection/v2_0/invoice", self.url))
         .bearer_auth(access_token.access_token)
         //.header("X-Callback-Url", callback_url.unwrap_or(""))
         .header("X-Reference-Id", &invoice.external_id)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Content-Type", "application/json")
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-        .body(invoice.clone())
-        .send().await?;
+        .body(invoice.clone());
+        
+
+
+        if let Some(callback_url) = callback_url {
+            if !callback_url.is_empty() {
+                req = req.header("X-Callback-Url", callback_url);
+            }
+        }
+        
+        let res = req.send().await?;
 
 
         if res.status().is_success() {
@@ -152,17 +168,24 @@ impl Collection {
         Making it possible to perform payments via the partner gateway. This may be used to pay for external bills or to perform air-time top-ups.
         @return Ok(())
      */
-    pub async fn create_payments(&self, payment: CreatePayment, _callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn create_payments(&self, payment: CreatePayment, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
-        let res = client.post(format!("{}/collection/v2_0/payment", self.url))
+        let mut req = client.post(format!("{}/collection/v2_0/payment", self.url))
         .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("X-Reference-Id", &payment.external_transaction_id)
         .header("Cache-Control", "no-cache")
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-        .body(payment.clone())
-        .send().await?;
+        .body(payment.clone());
+
+        if let Some(callback_url) = callback_url {
+            if !callback_url.is_empty() {
+                req = req.header("X-Callback-Url", callback_url);
+            }
+        }
+        
+        let res = req.send().await?;
 
         if res.status().is_success() {
             Ok(payment.external_transaction_id)
@@ -379,17 +402,25 @@ impl Collection {
 
     @return Ok(())
      */
-    pub async fn request_to_withdraw_v1(&self, request: RequestToPay, _callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn request_to_withdraw_v1(&self, request: RequestToPay, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
-        let res = client.post(format!("{}/collection/v1_0/requesttowithdraw", self.url))
+        let mut req = client.post(format!("{}/collection/v1_0/requesttowithdraw", self.url))
         .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("X-Reference-Id", &request.external_id)
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
         .header("Content-Type", "application/json")
-        .body(request.clone())
-        .send().await?;
+        .body(request.clone());
+
+
+        if let Some(callback_url) = callback_url {
+            if !callback_url.is_empty() {
+                req = req.header("X-Callback-Url", callback_url);
+            }
+        }
+        
+        let res = req.send().await?;
     
         if res.status().is_success() {
             Ok(request.external_id)
@@ -406,17 +437,24 @@ impl Collection {
     @return Ok(())
     
      */
-    pub async fn request_to_withdraw_v2(&self, request: RequestToPay, _callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn request_to_withdraw_v2(&self, request: RequestToPay, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
-        let res = client.post(format!("{}/collection/v2_0/requesttowithdraw", self.url))
+        let mut req = client.post(format!("{}/collection/v2_0/requesttowithdraw", self.url))
         .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("X-Reference-Id", &request.external_id) 
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
         .header("Content-Type", "application/json")
-        .body(request.clone())
-        .send().await?;
+        .body(request.clone());
+
+        if let Some(callback_url) = callback_url {
+            if !callback_url.is_empty() {
+                req = req.header("X-Callback-Url", callback_url);
+            }
+        }
+        
+        let res = req.send().await?;
 
         if res.status().is_success() {
             Ok(request.external_id)
@@ -583,16 +621,23 @@ impl MOMOAuthorization for Collection {
         @return BCAuthorizeResponse
     
      */
-    async fn bc_authorize(&self, msisdn: String, _callback_url: Option<&str>) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
+    async fn bc_authorize(&self, msisdn: String, callback_url: Option<&str>) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
-        let res = client.post(format!("{}/collection/v1_0/bc-authorize", self.url))
+        let mut req = client.post(format!("{}/collection/v1_0/bc-authorize", self.url))
         .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Content-type", "application/x-www-form-urlencoded")
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-        .body(BcAuthorize{login_hint: format!("ID:{}/MSISDN", msisdn), scope: "profile".to_string(), access_type: AccessType::Offline}.to_string()) // scope can be profile: all_info
-        .send().await?;
+        .body(BcAuthorize{login_hint: format!("ID:{}/MSISDN", msisdn), scope: "profile".to_string(), access_type: AccessType::Offline}.to_string());
+
+        if let Some(callback_url) = callback_url {
+            if !callback_url.is_empty() {
+                req = req.header("X-Callback-Url", callback_url);
+            }
+        }
+        
+        let res = req.send().await?;
 
         if res.status().is_success() {
             let body = res.text().await?;
