@@ -1,5 +1,5 @@
-name: Testing the application
-run-name: MTNMomo Test
+name: build
+run-name: build_test
 on: [push]
 jobs:
   build:

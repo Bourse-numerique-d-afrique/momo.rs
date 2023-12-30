@@ -1,5 +1,4 @@
-name: Publish to crates.io
-
+name: crates.io
 on:
   release:
     types:
