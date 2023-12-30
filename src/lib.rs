@@ -78,8 +78,8 @@
 #[doc(hidden)]
 use std::error::Error;
 
-use enums::environment::Environment;
-use products::{provisioning::Provisioning, collection::Collection, remittance::Remittance, disbursements::Disbursements};
+
+
 use uuid::Uuid;
 
 
@@ -96,6 +96,32 @@ pub mod requests;
 pub mod products;
 #[doc(hidden)]
 pub mod enums;
+
+
+pub type PartyIdType = enums::party_id_type::PartyIdType;
+pub type Currency = enums::currency::Currency;
+pub type Environment = enums::environment::Environment;
+pub type AccessType = enums::access_type::AccessType;
+
+pub type Party = structs::party::Party;
+pub type Balance = structs::balance::Balance;
+pub type Money = structs::money::Money;
+
+pub type RequestToPayRequest = requests::request_to_pay::RequestToPay;
+pub type RefundRequest = requests::refund::Refund;
+pub type TransferRequest = requests::transfer::Transfer;
+pub type CashTransferRequest = requests::cash_transfer::CashTransferRequest;
+pub type InvoiceRequest = requests::invoice::InvoiceRequest;
+pub type DeleteInvoiceRequest = requests::invoice_delete::InvoiceDelete;
+pub type CreatePaymentRequest = requests::create_payment::CreatePayment;
+pub type DeliveryNotification = requests::delivery_notification::DeliveryNotification;
+
+
+pub type Collection = products::collection::Collection;
+pub type Remittance = products::remittance::Remittance;
+pub type Disbursements = products::disbursements::Disbursements;
+pub type Provisioning = products::provisioning::Provisioning;
+
 
 
 

@@ -1,6 +1,9 @@
 ### MOMO.rs is a Rust library for the MOMO payment gateway.
 [![build tests](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/deployment.yml/badge.svg)](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/deployment.yml)
 [![crates.io](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/publish.yml/badge.svg)](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/publish.yml)
+[![Crates.io][crates-badge]][https://crates.io/crates/mtnmomo]
+[![MIT licensed][mit-badge]][https://choosealicense.com/licenses/mit/]
+[![Docs][docs-badge]][https://docs.rs/mtnmomo/0.1.2/mtnmomo/]
 <p align="center">
   <img src="https://github.com/Bourse-numerique-d-afrique/momo.rs/blob/master/images/BrandGuid-mtnmomo.svg" alt="MOMO logo">
 </p>
