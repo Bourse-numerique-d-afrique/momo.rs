@@ -1,5 +1,6 @@
 ### MOMO.rs is a Rust library for the MOMO payment gateway.
-[![Testing the application](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/deployment.yml/badge.svg)](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/deployment.yml)
+[![build tests](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/deployment.yml/badge.svg)](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/deployment.yml)
+[![crates.io](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/publish.yml/badge.svg)](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/publish.yml)
 <p align="center">
   <img src="https://github.com/Bourse-numerique-d-afrique/momo.rs/blob/master/images/BrandGuid-mtnmomo.svg" alt="MOMO logo">
 </p>
@@ -8,7 +9,7 @@
 ### Installation
 ```toml
 [dependencies]
-mtnmomo = "0.1.0"
+mtnmomo = "0.1.1"
 ```
 
 or you can use cargo add
