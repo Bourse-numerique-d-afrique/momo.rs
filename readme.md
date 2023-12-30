@@ -9,7 +9,7 @@
 ### Installation
 ```toml
 [dependencies]
-mtnmomo = "0.1.1"
+mtnmomo = "0.1.2"
 ```
 
 or you can use cargo add
