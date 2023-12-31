@@ -11,8 +11,8 @@
 
 use std::sync::Arc;
 
-use crate::{traits::{account::Account, auth::MOMOAuthorization}, responses::{token_response::TokenResponse, bcauthorize_response::BCAuthorizeResponse, oauth2tokenresponse::OAuth2TokenResponse, account_info::BasicUserInfoJsonResponse, transfer_result::TransferResult, cash_transfer_result::CashTransferResult}, enums::{environment::Environment, access_type::AccessType}, requests::{bc_authorize::BcAuthorize, transfer::Transfer, cash_transfer::CashTransferRequest, access_token::AccessTokenRequest}};
-use crate::structs::balance::Balance;
+use crate::{traits::{account::Account, auth::MOMOAuthorization},
+ TranserId, Currency, Environment, TokenResponse, CashTransferRequest, TransferRequest, Balance, BasicUserInfoJsonResponse, OAuth2TokenResponse, AccessTokenRequest, BCAuthorizeResponse, BcAuthorizeRequest, AccessType, CashTransferResult, TransferResult};
 use chrono::Utc;
 use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
@@ -83,6 +83,8 @@ impl Remittance {
     /*
         Cash transfer operation is used to transfer an amount from the owner’s account to a payee account.
         Status of the transaction can be validated by using GET /cashtransfer/{referenceId}
+        @param transfer
+        @param callback_url, optional, the url to be called when the transaction is completed
         @return Ok(())
      */
     pub async fn cash_transfer(&self, transfer: CashTransferRequest, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
@@ -115,6 +117,8 @@ impl Remittance {
     /*
         This operation is used to get the status of a transfer.
         X-Reference-Id that was passed in the post is used as reference to the request.
+        @param transfer_id, the id of the transfer
+        @return CashTransferResult
      */
     pub async fn get_cash_transfer_status(&self, transfer_id: &str) -> Result<CashTransferResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
@@ -142,8 +146,10 @@ impl Remittance {
     /*
         Transfer operation is used to transfer an amount from the own account to a payee account.
         Status of the transaction can validated by using the GET /transfer/{referenceId}
+        @param transfer ,mtnmomo::Transfer
+        @return TranserId
      */
-    pub async fn transfer(&self, transfer: Transfer) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn transfer(&self, transfer: TransferRequest) -> Result<TranserId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/remittance/v1_0/transfer", self.url))
@@ -157,7 +163,7 @@ impl Remittance {
         .await?;
 
     if res.status().is_success() {
-        Ok(transfer.external_id)
+        Ok(TranserId(transfer.external_id))
     }else {
         Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
     }
@@ -166,6 +172,8 @@ impl Remittance {
     /*
         This operation is used to get the status of a transfer.
         X-Reference-Id that was passed in the post is used as reference to the request.
+        @param transfer_id, the id of the transfer
+        @return TransferResult
      */
     pub async fn get_transfer_status(&self, transfer_id: &str) -> Result<TransferResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
@@ -191,6 +199,10 @@ impl Remittance {
 }
 
 impl Account for Remittance {
+    /*
+        This operation is used to get the balance of the account.
+        @return Balance
+     */
     async fn get_account_balance(&self) -> Result<Balance, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
@@ -210,10 +222,16 @@ impl Account for Remittance {
         }
     }
 
-    async fn get_account_balance_in_specific_currency(&self, currency: String) -> Result<Balance, Box<dyn std::error::Error>> {
+    /*
+        This operation is used to get the balance of the account in a specific currency.
+        @param currency
+        @return Balance
+
+     */
+    async fn get_account_balance_in_specific_currency(&self, currency: Currency) -> Result<Balance, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
-        let res = client.get(format!("{}/remittance/v1_0/account/balance/{}", self.url, currency.to_lowercase()))
+        let res = client.get(format!("{}/remittance/v1_0/account/balance/{}", self.url, currency.to_string().to_lowercase()))
         .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
@@ -228,6 +246,12 @@ impl Account for Remittance {
         }
     }
 
+    /*
+        This operation is used to get the basic user information of the account holder.
+        @param account_holder_msisdn
+        @return BasicUserInfoJsonResponse
+    
+     */
     async fn get_basic_user_info(&self, account_holder_msisdn: &str) -> Result<BasicUserInfoJsonResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
@@ -247,6 +271,12 @@ impl Account for Remittance {
         }
     }
 
+
+    /*
+        This operation is used to get the basic user information of the account holder.
+        @param access_token
+        @return BasicUserInfoJsonResponse
+     */
     async fn get_user_info_with_consent(&self, access_token: String) -> Result<BasicUserInfoJsonResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let res = client.get(format!("{}/remittance/oauth2/v1_0/userinfo", self.url))
@@ -265,6 +295,13 @@ impl Account for Remittance {
         }
     }
 
+
+    /*
+        This operation is used to validate the status of an account holder.
+        @param account_holder_id
+        @param account_holder_type
+        @return Ok(())
+     */
     async fn validate_account_holder_status(&self,  account_holder_id: &str, account_holder_type: &str) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
@@ -283,6 +320,12 @@ impl Account for Remittance {
 }
 
 impl MOMOAuthorization for Remittance {
+
+    /*
+        This operation is used to create an access token.
+        @return TokenResponse
+    
+     */
     async fn create_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
         
         let client = reqwest::Client::new();
@@ -309,6 +352,12 @@ impl MOMOAuthorization for Remittance {
         }
     }
 
+    /*
+        This operation is used to create an OAuth2 token.
+        @param auth_req_id, this is the auth_req_id of the request to pay
+        @return OAuth2TokenResponse
+    
+     */
     async fn create_o_auth_2_token(&self, auth_req_id: String) -> Result<OAuth2TokenResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let res = client.post(format!("{}/remittance/oauth2/token/", self.url))
@@ -329,6 +378,12 @@ impl MOMOAuthorization for Remittance {
         }
     }
 
+    /*
+        This operation is used to authorize a user.
+        @param msisdn, this is the phone number of the user
+        @param callback_url, this is the url that will be used to notify the client of the status of the transaction
+        @return BCAuthorizeResponse
+     */
     async fn bc_authorize(&self, msisdn: String, callback_url: Option<&str>) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
@@ -337,7 +392,7 @@ impl MOMOAuthorization for Remittance {
         .header("X-Target-Environment", self.environment.to_string())
         .header("Content-type", "application/x-www-form-urlencoded")
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-        .body(BcAuthorize{login_hint: format!("ID:{}/MSISDN", msisdn), scope: "profile".to_string(), access_type: AccessType::Offline}.to_string());
+        .body(BcAuthorizeRequest{login_hint: format!("ID:{}/MSISDN", msisdn), scope: "profile".to_string(), access_type: AccessType::Offline}.to_string());
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
@@ -360,9 +415,11 @@ impl MOMOAuthorization for Remittance {
 
 #[cfg(test)]
 mod tests {
-    use crate::{enums::{environment::Environment, party_id_type::PartyIdType, currency::Currency}, products::remittance::Remittance, traits::{account::Account, auth::MOMOAuthorization}, requests::transfer::Transfer, structs::party::Party};
+    use super::*;
     use dotenv::dotenv;
     use std::env;
+
+    use crate::{Remittance, PartyIdType, Party};
 
     // #[tokio::test]
     // async fn test_cash_transfer() {
@@ -409,14 +466,14 @@ mod tests {
         let api_user = env::var("MTN_API_USER").expect("MTN_API_USER not set");
         let api_key = env::var("MTN_API_KEY").expect("MTN_API_KEY not set");
         let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        let transfer = Transfer::new("100".to_string(), Currency::EUR, Party {
+        let transfer = TransferRequest::new("100".to_string(), Currency::EUR, Party {
             party_id_type: PartyIdType::MSISDN,
             party_id: "256774290781".to_string(),
         }, "payer_message".to_string(), "payee_note".to_string());
 
         let transer_result = remittance.transfer(transfer.clone()).await;
         assert!(transer_result.is_ok());
-        assert_eq!(transer_result.unwrap(), transfer.external_id);
+        assert_eq!(transer_result.unwrap().as_string(), transfer.external_id);
     }
 
     #[tokio::test]
@@ -428,14 +485,14 @@ mod tests {
         let api_user = env::var("MTN_API_USER").expect("MTN_API_USER not set");
         let api_key = env::var("MTN_API_KEY").expect("MTN_API_KEY not set");
         let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        let transfer = Transfer::new("100".to_string(), Currency::EUR, Party {
+        let transfer = TransferRequest::new("100".to_string(), Currency::EUR, Party {
             party_id_type: PartyIdType::MSISDN,
             party_id: "256774290781".to_string(),
         }, "payer_message".to_string(), "payee_note".to_string());
         let transfer_result = remittance.transfer(transfer.clone()).await;
         assert!(transfer_result.is_ok());
 
-        let status_result = remittance.get_transfer_status(&transfer_result.unwrap()).await;
+        let status_result = remittance.get_transfer_status(transfer_result.unwrap().as_str()).await;
         assert!(status_result.is_ok());
         assert_eq!(status_result.unwrap().status, "SUCCESSFUL");
     }
@@ -495,7 +552,7 @@ mod tests {
     //     let api_user = env::var("MTN_API_USER").expect("MTN_API_USER not set");
     //     let api_key = env::var("MTN_API_KEY").expect("MTN_API_KEY not set");
     //     let remittance = Remittance::new(url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-    //     let balance: Balance = remittance.get_account_balance_in_specific_currency("EUR".to_string()).await.unwrap();
+    //     let balance: Balance = remittance.get_account_balance_in_specific_currency(Currency::EUR).await.unwrap();
     //     println!("{:?}", balance);
     //     // todo()
     // }

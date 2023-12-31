@@ -1,6 +1,6 @@
 [package]
 name = "mtnmomo"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 authors = ["ONDONDA Prince Merveil @princefr"]
 description = "MTN Momo Payment API for Rust, with support for both the Sandbox and Production environments. All products are supported: Collections, Disbursements and Remittances."

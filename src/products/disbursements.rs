@@ -12,14 +12,10 @@
 use std::sync::Arc;
 
 use crate::{
-    enums::{environment::Environment, access_type::AccessType},
-    requests::{refund::Refund, transfer::Transfer, bc_authorize::BcAuthorize, access_token::AccessTokenRequest},
     responses::{
-        account_info::BasicUserInfoJsonResponse,
-        bcauthorize_response::BCAuthorizeResponse, oauth2tokenresponse::OAuth2TokenResponse,
         token_response::TokenResponse, transfer_result::TransferResult, refund_result::RefundResult,
     },
-    traits::{account::Account, auth::MOMOAuthorization}, structs::balance::Balance,
+    traits::{account::Account, auth::MOMOAuthorization}, TranserId, RefundId, DepositId, Currency, Environment, TransferRequest, RefundRequest, Balance, BasicUserInfoJsonResponse, OAuth2TokenResponse, AccessTokenRequest, BCAuthorizeResponse, AccessType, BcAuthorizeRequest,
 };
 
 use chrono::Utc;
@@ -89,9 +85,10 @@ impl Disbursements {
     /*
        deposit operation is used to deposit an amount from the owner’s account to a payee account.
        Status of the transaction can be validated by using the GET /deposit/{referenceId}
-       @return Ok(())
+       @param transfer
+       @return DepositId, this is the reference id of the transaction (mtn external id)
     */
-    pub async fn deposit_v1(&self, transfer: Transfer) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn deposit_v1(&self, transfer: TransferRequest) -> Result<DepositId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client
@@ -110,7 +107,7 @@ impl Disbursements {
             .await?;
 
             if res.status().is_success() {
-                Ok(transfer.external_id)
+                Ok(DepositId(transfer.external_id))
             }else {
                 Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
             }
@@ -119,9 +116,10 @@ impl Disbursements {
     /*
        deposit operation is used to deposit an amount from the owner’s account to a payee account.
        Status of the transaction can be validated by using the GET /deposit/{referenceId}
-       @return Ok(())
+       @param transfer
+       @return DepositId, this is the reference id of the transaction (mtn external id)
     */
-    pub async fn deposit_v2(&self, transfer: Transfer) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn deposit_v2(&self, transfer: TransferRequest) -> Result<DepositId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client
@@ -140,7 +138,7 @@ impl Disbursements {
             .await?;
 
         if res.status().is_success() {
-            Ok(transfer.external_id)
+            Ok(DepositId(transfer.external_id))
         }else {
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
         }
@@ -149,6 +147,8 @@ impl Disbursements {
     /*
        This operation is used to get the status of a deposit.
        X-Reference-Id that was passed in the post is used as reference to the request.
+       @param deposit_id
+       @return TransferResult
     */
     pub async fn get_deposit_status(&self, deposit_id: String) -> Result<TransferResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
@@ -178,7 +178,8 @@ impl Disbursements {
        This operation is used to get the status of a refund.
        X-Reference-Id that was passed in the post is used as reference to the request.
 
-       @return Ok(())
+       @param reference_id
+       @return RefundResult
     */
     pub async fn get_refund_status(&self, reference_id: &str) -> Result<RefundResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
@@ -207,7 +208,8 @@ impl Disbursements {
     /*
        This operation is used to get the status of a transfer.
        X-Reference-Id that was passed in the post is used as reference to the request.
-       @return Ok(())
+       @param transfer_id, this is the reference id of the transaction (mtn external id)
+       @return TransferResult
     */
     pub async fn get_transfer_status(&self, transfer_id: &str) -> Result<TransferResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
@@ -236,9 +238,11 @@ impl Disbursements {
     /*
        refund operation is used to refund an amount from the owner’s account to a payee account.
        Status of the transaction can be validated by using the GET /refund/{referenceId}
-       @return Ok(())
+       @param refund struct containing the refund details
+       @param callback_url, this is the url that will be used to notify the client of the status of the transaction
+       @return RefundId, this is the reference id of the transaction (mtn external id)
     */
-    pub async fn refund_v1(&self, refund: Refund, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn refund_v1(&self, refund: RefundRequest, callback_url: Option<&str>) -> Result<RefundId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let refund_id = uuid::Uuid::new_v4().to_string();
         let access_token = self.get_valid_access_token().await?;
@@ -264,7 +268,7 @@ impl Disbursements {
             let res = req.send().await?;
 
         if res.status().is_success() {
-            Ok(refund_id)
+            Ok(RefundId(refund_id))
         }else {
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
         }
@@ -273,9 +277,11 @@ impl Disbursements {
     /*
        refund operation is used to refund an amount from the owner’s account to a payee account.
        Status of the transaction can be validated by using the GET /refund/{referenceId}
-       @return Ok(())
+       @param refund struct containing the refund details
+       @param callback_url, this is the url that will be used to notify the client of the status of the transaction
+       @return RefundId, this is the reference id of the transaction (mtn external id)
     */
-    pub async fn refund_v2(&self, refund: Refund, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn refund_v2(&self, refund: RefundRequest, callback_url: Option<&str>) -> Result<RefundId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let refund_id = uuid::Uuid::new_v4().to_string();
         let access_token = self.get_valid_access_token().await?;
@@ -301,7 +307,7 @@ impl Disbursements {
             let res = req.send().await?;
 
         if res.status().is_success() {
-            Ok(refund_id)
+            Ok(RefundId(refund_id))
         }else {
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
         }
@@ -310,9 +316,10 @@ impl Disbursements {
     /*
        transfer operation is used to transfer an amount from the owner’s account to a payee account.
        Status of the transaction can be validated by using the GET /transfer/{referenceId}
-       @return Ok(())
+       @param transfer struct containing the transfer details
+       @return TranserId, this is the reference id of the transaction (mtn external id)
     */
-    pub async fn transfer(&self, transfer: Transfer) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn transfer(&self, transfer: TransferRequest) -> Result<TranserId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client
@@ -330,7 +337,7 @@ impl Disbursements {
             .await?;
 
         if res.status().is_success() {
-            Ok(transfer.external_id)
+            Ok(TranserId(transfer.external_id))
         }else {
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
         }
@@ -338,6 +345,10 @@ impl Disbursements {
 }
 
 impl Account for Disbursements {
+    /*
+       This operation is used to get the balance of the account.
+       @return Balance
+    */
     async fn get_account_balance(&self) -> Result<Balance, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
@@ -361,9 +372,14 @@ impl Account for Disbursements {
             }
     }
 
+    /*
+       This operation is used to get the balance of the account for a specific currency.
+       @param currency
+       @return Balance
+    */
     async fn get_account_balance_in_specific_currency(
         &self,
-        currency: String,
+        currency: Currency,
     ) -> Result<Balance, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
@@ -371,7 +387,7 @@ impl Account for Disbursements {
             .get(format!(
                 "{}/disbursement/v1_0/account/balance/{}",
                 self.url,
-                currency.to_lowercase()
+                currency.to_string().to_lowercase()
             ))
             .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
@@ -388,6 +404,12 @@ impl Account for Disbursements {
             }
     }
 
+
+    /*
+       This operation is used to get the basic user info of a user
+       @param account_holder_msisdn, this is the phone number of the user
+      @return BasicUserInfoJsonResponse
+    */
     async fn get_basic_user_info(
         &self, account_holder_msisdn: &str
     ) -> Result<BasicUserInfoJsonResponse, Box<dyn std::error::Error>> {
@@ -415,6 +437,11 @@ impl Account for Disbursements {
             }
     }
 
+    /*
+         This operation is used to get the basic user info of a user after they have given consent
+         @param access_token, this is the access token of the user
+        @return BasicUserInfoJsonResponse
+     */
     async fn get_user_info_with_consent(
         &self,
         access_token: String
@@ -441,6 +468,13 @@ impl Account for Disbursements {
             }
     }
 
+    /*
+         This operation is used to validate the status of an account holder
+         @param account_holder_id, this is the id of the account holder
+         @param account_holder_type, this is the type of the account holder
+         @return ()
+    
+     */
     async fn validate_account_holder_status(
         &self,
         account_holder_id: &str, account_holder_type: &str
@@ -468,6 +502,10 @@ impl Account for Disbursements {
 }
 
 impl MOMOAuthorization for Disbursements {
+    /*
+         This operation is used to get the latest access token
+         @return TokenResponse
+     */
     async fn create_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let res = client
@@ -494,6 +532,12 @@ impl MOMOAuthorization for Disbursements {
         }
     }
 
+
+    /*
+        This operation is used to create an OAuth2 token.
+        @param auth_req_id, this is the auth_req_id of the request to pay
+        @return OAuth2TokenResponse
+     */
     async fn create_o_auth_2_token(
         &self,
         auth_req_id: String
@@ -522,6 +566,13 @@ impl MOMOAuthorization for Disbursements {
             }
     }
 
+
+    /*
+        This operation is used to authorize a user.
+        @param msisdn, this is the phone number of the user
+        @param callback_url, this is the url that will be used to notify the client of the status of the transaction
+        @return BCAuthorizeResponse
+     */
     async fn bc_authorize(&self, msisdn: String, callback_url: Option<&str>) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
@@ -534,7 +585,7 @@ impl MOMOAuthorization for Disbursements {
             .header("X-Target-Environment", "sandbox")
             .header("Content-type", "application/x-www-form-urlencoded")
             .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-            .body(BcAuthorize{login_hint: format!("ID:{}/MSISDN", msisdn), scope: "profile".to_string(), access_type: AccessType::Offline}.to_string());
+            .body(BcAuthorizeRequest{login_hint: format!("ID:{}/MSISDN", msisdn), scope: "profile".to_string(), access_type: AccessType::Offline}.to_string());
 
             if let Some(callback_url) = callback_url {
                 if !callback_url.is_empty() {
@@ -556,13 +607,10 @@ impl MOMOAuthorization for Disbursements {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::env;
     use dotenv::dotenv;
-    use crate::{
-        enums::{environment::Environment, currency::Currency, party_id_type::PartyIdType},
-        products::{disbursements::Disbursements, collection::Collection},
-        traits::{account::Account, auth::MOMOAuthorization}, requests::{transfer::Transfer, refund::Refund, request_to_pay::RequestToPay}, structs::party::Party,
-    };
+    use crate::{traits::{account::Account, auth::MOMOAuthorization}, Party, PartyIdType, TransferRequest, Collection, RequestToPay};
 
     #[tokio::test]
     async fn test_get_account_balance() {
@@ -596,7 +644,7 @@ mod tests {
         let disbursements = Disbursements::new(
             mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
         );
-        let balance_result = disbursements.get_account_balance_in_specific_currency("EUR".to_string()).await;
+        let balance_result = disbursements.get_account_balance_in_specific_currency(Currency::EUR).await;
         if balance_result.is_ok() {
             let balance = balance_result.unwrap();
             assert_eq!(balance.currency, Currency::EUR);
@@ -717,10 +765,10 @@ mod tests {
             party_id_type: PartyIdType::MSISDN,
             party_id: "256774290781".to_string(),
         };
-        let transfer = Transfer::new("100".to_string(), Currency::EUR, payee, "payer_message".to_string(), "payee_note".to_string());
+        let transfer = TransferRequest::new("100".to_string(), Currency::EUR, payee, "payer_message".to_string(), "payee_note".to_string());
         let result = disbursements.deposit_v1(transfer.clone()).await;
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), transfer.external_id);
+        assert_eq!(result.unwrap().as_string(), transfer.external_id);
     }
 
     #[tokio::test]
@@ -739,10 +787,10 @@ mod tests {
                 party_id_type: PartyIdType::MSISDN,
                 party_id: "256774290781".to_string(),
             };
-            let transfer = Transfer::new("100".to_string(), Currency::EUR, payee, "payer_message".to_string(), "payee_note".to_string());
+            let transfer = TransferRequest::new("100".to_string(), Currency::EUR, payee, "payer_message".to_string(), "payee_note".to_string());
             let result = disbursements.deposit_v1(transfer.clone()).await;
             assert!(result.is_ok());
-            assert_eq!(result.unwrap(), transfer.external_id);
+            assert_eq!(result.unwrap().as_string(), transfer.external_id);
     }
 
     #[tokio::test]
@@ -762,10 +810,10 @@ mod tests {
             party_id_type: PartyIdType::MSISDN,
             party_id: "256774290781".to_string(),
         };
-        let transfer = Transfer::new("100".to_string(), Currency::EUR, payee, "payer_message".to_string(), "payee_note".to_string());
+        let transfer = TransferRequest::new("100".to_string(), Currency::EUR, payee, "payer_message".to_string(), "payee_note".to_string());
         let result = disbursements.deposit_v1(transfer.clone()).await;
         assert!(result.is_ok());
-        let status_result = disbursements.get_deposit_status(result.unwrap()).await;
+        let status_result = disbursements.get_deposit_status(result.unwrap().as_string()).await;
         assert!(status_result.is_ok());
     }
 
@@ -799,10 +847,10 @@ mod tests {
         assert!(res.is_ok());
 
         
-        let refund = Refund::new("100".to_string(), Currency::EUR.to_string(), "payer_message".to_string(), "payee_note".to_string(), res.unwrap());
+        let refund = RefundRequest::new("100".to_string(), Currency::EUR.to_string(), "payer_message".to_string(), "payee_note".to_string(), res.unwrap().0);
         let refund_res = disbursements.refund_v1(refund, None).await;
         assert!(refund_res.is_ok());
-        assert_ne!(refund_res.unwrap().len(), 0);
+        assert_ne!(refund_res.unwrap().as_str().len(), 0);
     }
 
     #[tokio::test]
@@ -834,10 +882,10 @@ mod tests {
         assert!(res.is_ok());
 
         
-        let refund = Refund::new("100".to_string(), Currency::EUR.to_string(), "payer_message".to_string(), "payee_note".to_string(), res.unwrap());
+        let refund = RefundRequest::new("100".to_string(), Currency::EUR.to_string(), "payer_message".to_string(), "payee_note".to_string(), res.unwrap().0);
         let refund_res = disbursements.refund_v2(refund, None).await;
         assert!(refund_res.is_ok());
-        assert_ne!(refund_res.unwrap().len(), 0);
+        assert_ne!(refund_res.unwrap().as_str().len(), 0);
     }
 
     #[tokio::test]
@@ -868,10 +916,10 @@ mod tests {
         assert!(res.is_ok());
 
         
-        let refund = Refund::new("100".to_string(), Currency::EUR.to_string(), "payer_message".to_string(), "payee_note".to_string(), res.unwrap());
+        let refund = RefundRequest::new("100".to_string(), Currency::EUR.to_string(), "payer_message".to_string(), "payee_note".to_string(), res.unwrap().0);
         let refund_res = disbursements.refund_v2(refund, None).await;
         assert!(refund_res.is_ok());
-        let refund_status_res = disbursements.get_refund_status(&refund_res.unwrap()).await.unwrap();
+        let refund_status_res = disbursements.get_refund_status(refund_res.unwrap().as_str()).await.unwrap();
         assert_ne!(refund_status_res.status.len(), 0);
     }
 
@@ -888,13 +936,13 @@ mod tests {
             mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key
         );
 
-        let transfer = Transfer::new("100".to_string(), Currency::EUR, Party {
+        let transfer = TransferRequest::new("100".to_string(), Currency::EUR, Party {
             party_id_type: PartyIdType::MSISDN,
             party_id: "256774290781".to_string(),
         }, "payer_message".to_string(), "payee_note".to_string());
         let transfer_result = disbursements.transfer(transfer.clone()).await;
         assert!(transfer_result.is_ok());
-        assert_eq!(transfer_result.unwrap(), transfer.external_id);
+        assert_eq!(transfer_result.unwrap().as_string(), transfer.external_id);
     }
 
     #[tokio::test]
@@ -912,14 +960,14 @@ mod tests {
 
 
 
-        let transfer = Transfer::new("100".to_string(), Currency::EUR, Party {
+        let transfer = TransferRequest::new("100".to_string(), Currency::EUR, Party {
             party_id_type: PartyIdType::MSISDN,
             party_id: "256774290781".to_string(),
         }, "payer_message".to_string(), "payee_note".to_string());
         let transfer_result = disbursements.transfer(transfer.clone()).await;
         assert!(transfer_result.is_ok());
 
-        let status_result = disbursements.get_transfer_status(&transfer_result.unwrap()).await;
+        let status_result = disbursements.get_transfer_status(transfer_result.unwrap().as_str()).await;
         assert!(status_result.is_ok());
 
     }

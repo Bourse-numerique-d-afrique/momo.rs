@@ -33,7 +33,6 @@ This package provides for an easy way to connect to MTN MoMo API, it provides fo
 ### how to use:
  ``` rust
 use mtnmomo::Momo;
-use mtnmomo::enums::environment::Environment;
 use uuid::Uuid;
 use dotenv::dotenv;
 use std::env;
@@ -60,13 +59,8 @@ For example, to request a payment from a customer, you can use the request_to_pa
 
 ### example making a request to pay:
 ``` rust
-use mtnmomo::Momo;
-use mtnmomo::enums::environment::Environment;
+use mtnmomo::{Momo, Party, PartyIdType, Currency, RequestToPay};
 use uuid::Uuid;
-use mtnmomo::structs::party::Party;
-use mtnmomo::enums::party_id_type::PartyIdType;
-use mtnmomo::enums::currency::Currency;
-use mtnmomo::requests::request_to_pay::RequestToPay;
 use dotenv::dotenv;
 use std::env;
 

@@ -12,22 +12,7 @@
 
 use std::sync::Arc;
 
-use crate::{traits::{account::Account, auth::MOMOAuthorization},
-     responses::{token_response::TokenResponse,
-     bcauthorize_response::BCAuthorizeResponse,
-     oauth2tokenresponse::OAuth2TokenResponse, account_info::BasicUserInfoJsonResponse,
-      invoice::InvoiceResult,
-     payment_result::PaymentResult, pre_approval::PreApprovalResult,
-     request_to_pay_result::RequestToPayResult},
-     requests::{invoice_delete::InvoiceDelete, invoice::InvoiceRequest,
-         create_payment::CreatePayment,
-          request_to_pay::RequestToPay,
-           pre_approval::PreApproval,
-            delivery_notification::DeliveryNotification, bc_authorize::BcAuthorize, access_token::AccessTokenRequest},
-             enums::{environment::Environment, access_type::AccessType}};
-
-use crate::structs::balance::Balance;
-
+use crate::{traits::{account::Account, auth::MOMOAuthorization}, InvoiceId, PaymentId, TransactionId, WithdrawId, Currency, TokenResponse, Environment, InvoiceDeleteRequest, InvoiceRequest, CreatePaymentRequest, InvoiceResult, PaymentResult, PreApprovalResult, PreApprovalRequest, RequestToPay, DeliveryNotificationRequest, RequestToPayResult, BasicUserInfoJsonResponse, OAuth2TokenResponse, BCAuthorizeResponse, AccessTokenRequest, AccessType, BcAuthorizeRequest, Balance};
 use chrono::Utc;
 use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
@@ -96,7 +81,9 @@ impl Collection {
 
     /*
         This operation is used to delete an invoice. The ReferenceId is associated with the invoice to be cancelled
-        @return InvoiceDelete
+        @param invoice_id The invoice id to be cancelled
+        @param callback_url The callback url to be used by the MOMO Core API to notify the merchant of the invoice status
+        @return Ok(())
     
      */
     pub async fn cancel_invoice(&self, invoice_id: &str, callback_url: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
@@ -108,7 +95,7 @@ impl Collection {
         .header("X-Target-Environment", self.environment.to_string())
         .header("X-Reference-Id", uuid::Uuid::new_v4().to_string())
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-        .body(InvoiceDelete{external_id: invoice_id.to_string()});
+        .body(InvoiceDeleteRequest{external_id: invoice_id.to_string()});
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
@@ -127,10 +114,12 @@ impl Collection {
 
     /*
         A merchant may use this in order to create an invoice that can be paid by an intended payer via any channel at a later stage.
-        @return Ok(())
+        @param invoice The invoice to be created on the MOMO Core API
+        @param callback_url The callback url to be used by the MOMO Core API to notify the merchant of the invoice status
+        @return InvoiceId, this is the external_id of the invoice
     
      */
-    pub async fn create_invoice(&self, invoice: InvoiceRequest, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn create_invoice(&self, invoice: InvoiceRequest, callback_url: Option<&str>) -> Result<InvoiceId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let mut req = client.post(format!("{}/collection/v2_0/invoice", self.url))
@@ -143,7 +132,6 @@ impl Collection {
         .body(invoice.clone());
         
 
-
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
                 req = req.header("X-Callback-Url", callback_url);
@@ -154,7 +142,7 @@ impl Collection {
 
 
         if res.status().is_success() {
-            Ok(invoice.external_id)
+            Ok(InvoiceId(invoice.external_id))
         }else {
             let res_clone = res.text().await?;
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res_clone)))
@@ -166,9 +154,11 @@ impl Collection {
 
     /*
         Making it possible to perform payments via the partner gateway. This may be used to pay for external bills or to perform air-time top-ups.
-        @return Ok(())
+        @param payment The payment to be created on the MOMO Core API
+        @param callback_url The callback url to be used by the MOMO Core API to notify the merchant of the payment status
+        @return PaymentId, this is the external_id of the payment
      */
-    pub async fn create_payments(&self, payment: CreatePayment, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn create_payments(&self, payment: CreatePaymentRequest, callback_url: Option<&str>) -> Result<PaymentId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let mut req = client.post(format!("{}/collection/v2_0/payment", self.url))
@@ -188,7 +178,7 @@ impl Collection {
         let res = req.send().await?;
 
         if res.status().is_success() {
-            Ok(payment.external_transaction_id)
+            Ok(PaymentId(payment.external_transaction_id))
         }else {
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
         }
@@ -197,6 +187,7 @@ impl Collection {
 
     /*
         This operation is used to get the status of an invoice. X-Reference-Id that was passed in the post is used as reference to the request
+        @param invoice_id The invoice id to be cancelled
         @return InvoiceResult
      */
     #[allow(dead_code)]
@@ -223,6 +214,7 @@ impl Collection {
 
     /*
         This operation is used to get the status of a Payment. X-Reference-Id that was passed in the post is used as reference to the request
+        @param payment_id The payment id to be cancelled
         @return PaymentResult
      */
     #[allow(dead_code)]
@@ -248,6 +240,8 @@ impl Collection {
 
     /*
     This operation is used to get the status of a pre-approval. X-Reference-Id that was passed in the post is used as reference to the request.
+    @param pre_approval_id The pre-approval id to be cancelled
+    @return PreApprovalResult
      */
     #[allow(dead_code)]
     async fn get_pre_approval_status(&self, pre_approval_id: String) -> Result<PreApprovalResult, Box<dyn std::error::Error>> {
@@ -272,9 +266,10 @@ impl Collection {
 
     /*
         Preapproval operation is used to create a pre-approval.
-        @return Ok(())
+        @param preaproval The pre-approval to be created on the MOMO Core API
+        @return external_id
      */
-    pub async fn pre_approval(&self, preaproval: PreApproval) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn pre_approval(&self, preaproval: PreApprovalRequest) -> Result<String, Box<dyn std::error::Error>> {
         let external_id = uuid::Uuid::new_v4().to_string();
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
@@ -301,10 +296,9 @@ impl Collection {
         The requesttopay will be in status PENDING until the transaction is authorized or declined by the payer or it is timed out by the system.
         Status of the transaction can be validated by using the GET /requesttopay/<resourceId>
         @param request
-        @param access_token access token obtained from the create_access_token method
-        @return Ok(())
+        @return TransactionId (external_id)
      */
-    pub async fn request_to_pay(&self, request: RequestToPay) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn request_to_pay(&self, request: RequestToPay) -> Result<TransactionId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/collection/v1_0/requesttopay", self.url))
@@ -318,7 +312,7 @@ impl Collection {
         .send().await?;
 
         if res.status().is_success() {
-            Ok(request.clone().external_id.clone())
+            Ok(TransactionId(request.external_id))
         } else {
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
         }
@@ -327,9 +321,11 @@ impl Collection {
 
     /*
         This operation is used to send additional Notification to an End User.
+        @param external_id, this is the external_id of the request to pay
+        @param notification, this is the notification message to be sent to the end user
         @return Ok(())
      */
-    pub async fn request_to_pay_delivery_notification(&self, external_id: &str, notification: DeliveryNotification) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn request_to_pay_delivery_notification(&self, external_id: &str, notification: DeliveryNotificationRequest) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let res = client.post(format!("{}/collection/v1_0/requesttopay/{}/deliverynotification", self.url, external_id))
@@ -352,6 +348,8 @@ impl Collection {
     /*
         This operation is used to get the status of a request to pay.
         X-Reference-Id that was passed in the post is used as reference to the request.
+        @param payment_id The payment id to be cancelled, external_id of the request to pay
+        @return RequestToPayResult, this is the result of the request to pay
      */
     pub async fn request_to_pay_transaction_status(&self, payment_id: &str) -> Result<RequestToPayResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
@@ -376,6 +374,8 @@ impl Collection {
     /*
         This operation is used to get the status of a request to withdraw.
         X-Reference-Id that was passed in the post is used as reference to the request.
+        @param payment_id The payment id to be cancelled, external_id of the request to pay
+        @return RequestToPayResult, this is the result of the request to pay
      */
     pub async fn request_to_withdraw_transaction_status(&self, payment_id: &str) -> Result<RequestToPayResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
@@ -399,10 +399,12 @@ impl Collection {
     This operation is used to request a withdrawal (cash-out) from a consumer (Payer).
     The payer will be asked to authorize the withdrawal.
     The transaction will be executed once the payer has authorized the withdrawal
+    @param request, this is the request to withdraw
+    @param callback_url, this is the callback url to be used by the MOMO Core API to notify the merchant of the request to withdraw status
 
-    @return Ok(())
+    @return WithdrawId, this is the external_id of the request to withdraw
      */
-    pub async fn request_to_withdraw_v1(&self, request: RequestToPay, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn request_to_withdraw_v1(&self, request: RequestToPay, callback_url: Option<&str>) -> Result<WithdrawId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let mut req = client.post(format!("{}/collection/v1_0/requesttowithdraw", self.url))
@@ -423,7 +425,7 @@ impl Collection {
         let res = req.send().await?;
     
         if res.status().is_success() {
-            Ok(request.external_id)
+            Ok(WithdrawId(request.external_id))
         } else {
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
         }
@@ -433,11 +435,12 @@ impl Collection {
     This operation is used to request a withdrawal (cash-out) from a consumer (Payer).
     The payer will be asked to authorize the withdrawal.
     The transaction will be executed once the payer has authorized the withdrawal
+    @param request, this is the request to withdraw
+    @param callback_url, this is the callback url to be used by the MOMO Core API to notify the merchant of the request to withdraw status
 
-    @return Ok(())
-    
+    @return WithdrawId, this is the external_id of the request to withdraw
      */
-    pub async fn request_to_withdraw_v2(&self, request: RequestToPay, callback_url: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn request_to_withdraw_v2(&self, request: RequestToPay, callback_url: Option<&str>) -> Result<WithdrawId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
         let mut req = client.post(format!("{}/collection/v2_0/requesttowithdraw", self.url))
@@ -457,7 +460,7 @@ impl Collection {
         let res = req.send().await?;
 
         if res.status().is_success() {
-            Ok(request.external_id)
+            Ok(WithdrawId(request.external_id))
         } else {
             Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, res.text().await?)))
         }
@@ -466,6 +469,10 @@ impl Collection {
 
 
 impl Account for Collection{
+    /*
+        This operation is used to get the balance of the account.
+        @return Balance
+     */
     async fn get_account_balance(&self) -> Result<Balance, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
@@ -486,10 +493,15 @@ impl Account for Collection{
 
     }
 
-    async fn get_account_balance_in_specific_currency(&self, currency: String) -> Result<Balance, Box<dyn std::error::Error>> {
+    /*
+        This operation is used to get the balance of an account in a specific currency.
+        @param currency The currency of the account balance to be retrieved
+        @return Balance
+     */
+    async fn get_account_balance_in_specific_currency(&self, currency: Currency) -> Result<Balance, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
-        let res = client.get(format!("{}/collection/v1_0/account/balance/{}", self.url, currency.to_lowercase()))
+        let res = client.get(format!("{}/collection/v1_0/account/balance/{}", self.url, currency.to_string().to_lowercase()))
         .bearer_auth(access_token.access_token)
         .header("X-Target-Environment", self.environment.to_string())
         .header("Cache-Control", "no-cache")
@@ -506,6 +518,11 @@ impl Account for Collection{
         }
     }
 
+    /*
+        This operation is used to get the basic information of the account holder.
+        @param account_holder_msisdn The MSISDN of the account holder
+        @return BasicUserInfoJsonResponse
+     */
     async fn get_basic_user_info(&self, account_holder_msisdn: &str) -> Result<BasicUserInfoJsonResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
@@ -524,6 +541,11 @@ impl Account for Collection{
         }
     }
 
+    /*
+        This operation is used to get the basic information of the account holder.
+        @param access_token The access token of the account holder
+        @return BasicUserInfoJsonResponse
+     */
     async fn get_user_info_with_consent(&self, access_token: String) -> Result<BasicUserInfoJsonResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let res = client.get(format!("{}/collection/oauth2/v1_0/userinfo", self.url))
@@ -543,6 +565,12 @@ impl Account for Collection{
 
     }
 
+    /*
+        This operation is used to validate the status of an account holder.
+        @param account_holder_id The MSISDN or email of the account holder
+        @param account_holder_type The type of the account holder
+        @return Ok(())
+     */
     async fn validate_account_holder_status(&self, account_holder_id: &str, account_holder_type: &str) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
@@ -564,6 +592,10 @@ impl Account for Collection{
 
 
 impl MOMOAuthorization for Collection {
+    /*
+        This operation is used to create an access token.
+        @return TokenResponse
+     */
     async fn create_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let res = client.post(format!("{}/collection/token/", self.url))
@@ -593,6 +625,7 @@ impl MOMOAuthorization for Collection {
 
     /* 
         This operation is used to create an OAuth2 token.
+        @param auth_req_id, this is the auth_req_id of the request to pay
         @return OAuth2TokenResponse
     
     */
@@ -616,8 +649,9 @@ impl MOMOAuthorization for Collection {
     }
 
     /*
-        This operation is used to authorize a payment request.
-        @param msisdn The MSISDN of the user
+        This operation is used to authorize a user.
+        @param msisdn, this is the phone number of the user
+        @param callback_url, this is the url that will be used to notify the client of the status of the transaction
         @return BCAuthorizeResponse
     
      */
@@ -629,7 +663,7 @@ impl MOMOAuthorization for Collection {
         .header("X-Target-Environment", self.environment.to_string())
         .header("Content-type", "application/x-www-form-urlencoded")
         .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-        .body(BcAuthorize{login_hint: format!("ID:{}/MSISDN", msisdn), scope: "profile".to_string(), access_type: AccessType::Offline}.to_string());
+        .body(BcAuthorizeRequest{login_hint: format!("ID:{}/MSISDN", msisdn), scope: "profile".to_string(), access_type: AccessType::Offline}.to_string());
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
@@ -653,13 +687,7 @@ impl MOMOAuthorization for Collection {
 #[cfg(test)] 
 mod tests {
     use super::*;
-    use crate::enums::currency::Currency;
-    use crate::enums::party_id_type::PartyIdType;
-    use crate::products::collection::Collection;
-    use crate::structs::money::Money;
-    use crate::traits::{account::Account, auth::MOMOAuthorization};
-    use crate::requests::{invoice::InvoiceRequest, create_payment::CreatePayment, request_to_pay::RequestToPay, pre_approval::PreApproval, delivery_notification::DeliveryNotification};
-    use crate::structs::party::Party;
+    use crate::{Party, PartyIdType, Money};
     use dotenv::dotenv;
     use std::env;
 
@@ -685,7 +713,7 @@ mod tests {
         };
         let invoice = InvoiceRequest::new("100".to_string(), Currency::EUR.to_string(), "360".to_string(), payer, payee, "test invoice".to_string());
         let invoice_id = collection.create_invoice(invoice, None).await.expect("Error creating invoice");
-        let res = collection.cancel_invoice(&invoice_id, None).await;
+        let res = collection.cancel_invoice(invoice_id.as_str(), None).await;
         assert!(res.is_ok());
     }
 
@@ -727,9 +755,9 @@ mod tests {
         let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
         let res = collection.request_to_pay(request).await.expect("Error requesting payment");
 
-        assert_ne!(res.len(), 0);
+        assert_ne!(res.as_str().len(), 0);
 
-        let status = collection.request_to_pay_transaction_status(&res).await.expect("Error getting payment status");
+        let status = collection.request_to_pay_transaction_status(res.as_str()).await.expect("Error getting payment status");
         assert_eq!(status.status, "SUCCESSFUL");
     }
 
@@ -751,9 +779,9 @@ mod tests {
         let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
         let res = collection.request_to_pay(request).await.expect("Error requesting payment");
 
-        assert_ne!(res.len(), 0);
+        assert_ne!(res.0.len(), 0);
 
-        let notifcation_result = collection.request_to_pay_delivery_notification(&res, DeliveryNotification{notification_message: "test_notification_message".to_string()}).await;
+        let notifcation_result = collection.request_to_pay_delivery_notification(&res.0, DeliveryNotificationRequest{notification_message: "test_notification_message".to_string()}).await;
         assert!(notifcation_result.is_ok());
 
     }
@@ -882,7 +910,7 @@ mod tests {
         let invoice = InvoiceRequest::new("100".to_string(), Currency::EUR.to_string(), "360".to_string(), payer, payee, "test invoice".to_string());
         let invoice_id = collection.create_invoice(invoice, None).await.expect("Error creating invoice");
 
-        let res = collection.get_invoice_status(invoice_id).await.expect("Error getting invoice status");
+        let res = collection.get_invoice_status(invoice_id.0).await.expect("Error getting invoice status");
         assert_eq!(res.status, "SUCCESSFUL".to_string());
     }
 
@@ -904,7 +932,7 @@ mod tests {
             party_id_type:PartyIdType::MSISDN,
             party_id: "+242064818006".to_string(),
         };
-        let preapproval = PreApproval { payer: user, payer_currency: Currency::EUR.to_string(), payer_message: "".to_string(), validity_time: 3600};
+        let preapproval = PreApprovalRequest { payer: user, payer_currency: Currency::EUR.to_string(), payer_message: "".to_string(), validity_time: 3600};
         let res = collection.pre_approval(preapproval).await;
         if res.is_ok() {
             assert!(true);
@@ -927,7 +955,7 @@ mod tests {
             party_id_type: PartyIdType::MSISDN,
             party_id: "+242064818006".to_string(),
         };
-        let preapproval = PreApproval { payer: user, payer_currency: Currency::EUR.to_string(), payer_message: "".to_string(), validity_time: 3600};
+        let preapproval = PreApprovalRequest { payer: user, payer_currency: Currency::EUR.to_string(), payer_message: "".to_string(), validity_time: 3600};
         let res = collection.pre_approval(preapproval).await;
 
         if res.is_ok() {
@@ -946,7 +974,7 @@ mod tests {
         let api_key = env::var("MTN_API_KEY").expect("API_KEY must be set");
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
 
-        let payment = CreatePayment::new(
+        let payment = CreatePaymentRequest::new(
             Money{
                 amount: "100".to_string(),
                 currency: Currency::EUR.to_string(),
@@ -962,7 +990,7 @@ mod tests {
             true
         );
         let res = collection.create_payments(payment, None).await.expect("Error creating payment");
-        assert_ne!(res.len(), 0);
+        assert_ne!(res.as_str().len(), 0);
     }
 
     #[tokio::test]
@@ -978,7 +1006,7 @@ mod tests {
 
         
         let collection = Collection::new(mtn_url, Environment::Sandbox, api_user, api_key, primary_key, secondary_key);
-        let payment = CreatePayment::new(
+        let payment = CreatePaymentRequest::new(
             Money{
                 amount: "100".to_string(),
                 currency: Currency::EUR.to_string(),
@@ -994,7 +1022,7 @@ mod tests {
             true
         );
         let payment_id = collection.create_payments(payment, None).await.expect("Error creating payment");
-        let res = collection.get_payment_status(payment_id).await.expect("Error getting payment status");
+        let res = collection.get_payment_status(payment_id.as_string()).await.expect("Error getting payment status");
         assert_eq!(res.status, "SUCCESSFUL");
     }
 
@@ -1018,7 +1046,7 @@ mod tests {
         };
         let request = RequestToPay::new("100.0".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
         let res = collection.request_to_withdraw_v1(request, None).await.expect("Error requesting to withdraw");
-        assert_ne!(res.len(), 0);
+        assert_ne!(res.as_str().len(), 0);
     }
 
     #[tokio::test]
@@ -1041,7 +1069,7 @@ mod tests {
         };
         let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
         let res = collection.request_to_withdraw_v2(request, None).await.expect("Error requesting to withdraw");
-        assert_ne!(res.len(), 0);
+        assert_ne!(res.as_str().len(), 0);
     }
 
     #[tokio::test]
@@ -1064,7 +1092,7 @@ mod tests {
         };
         let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
         let withdraw_id = collection.request_to_withdraw_v2(request, None).await.expect("Error requesting to withdraw");
-        let res = collection.request_to_withdraw_transaction_status(&withdraw_id).await.expect("Error getting request to withdraw status");
+        let res = collection.request_to_withdraw_transaction_status(&withdraw_id.0).await.expect("Error getting request to withdraw status");
         assert_eq!(res.status, "SUCCESSFUL");
     }
 

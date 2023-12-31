@@ -8,7 +8,6 @@
 //! # Examples
 //! ```
 //! use mtnmomo::Momo;
-//! use mtnmomo::enums::environment::Environment;
 //! use uuid::Uuid;
 //! use dotenv::dotenv;
 //! use std::env;
@@ -40,13 +39,8 @@
 //! If you want to request a payment from a customer, you can use the request_to_pay method of the Collection product.
 //! 
 //! ```
-//! use mtnmomo::Momo;
-//! use mtnmomo::enums::environment::Environment;
+//! use mtnmomo::{Momo, Party, PartyIdType, Currency, RequestToPay};
 //! use uuid::Uuid;
-//! use mtnmomo::structs::party::Party;
-//! use mtnmomo::enums::party_id_type::PartyIdType;
-//! use mtnmomo::enums::currency::Currency;
-//! use mtnmomo::requests::request_to_pay::RequestToPay;
 //! use dotenv::dotenv;
 //! use std::env;
 //! 
@@ -72,7 +66,6 @@
 //! The customer will receive a prompt on their phone to confirm the payment.
 //! If the customer confirms the payment, the payment will be processed and the customer will receive a confirmation message.
 //! If the customer declines the payment, the payment will not be processed and the customer will receive a message informing them that the payment was declined.
-//! The request_to_pay method returns a Result<RequestToPayResponse, Box<dyn Error>>.
 
 
 #[doc(hidden)]
@@ -83,18 +76,13 @@ use std::error::Error;
 use uuid::Uuid;
 
 
-#[doc(hidden)]
+
 pub mod traits;
-#[doc(hidden)]
 pub mod structs;
-#[doc(hidden)]
 pub mod responses;
-#[doc(hidden)]
 pub mod errors;
-#[doc(hidden)]
 pub mod requests;
 pub mod products;
-#[doc(hidden)]
 pub mod enums;
 
 
@@ -107,20 +95,128 @@ pub type Party = structs::party::Party;
 pub type Balance = structs::balance::Balance;
 pub type Money = structs::money::Money;
 
-pub type RequestToPayRequest = requests::request_to_pay::RequestToPay;
+
+// Requests
+pub type RequestToPay = requests::request_to_pay::RequestToPay;
 pub type RefundRequest = requests::refund::Refund;
 pub type TransferRequest = requests::transfer::Transfer;
 pub type CashTransferRequest = requests::cash_transfer::CashTransferRequest;
 pub type InvoiceRequest = requests::invoice::InvoiceRequest;
 pub type DeleteInvoiceRequest = requests::invoice_delete::InvoiceDelete;
 pub type CreatePaymentRequest = requests::create_payment::CreatePayment;
-pub type DeliveryNotification = requests::delivery_notification::DeliveryNotification;
+pub type DeliveryNotificationRequest = requests::delivery_notification::DeliveryNotification;
+pub type InvoiceDeleteRequest = requests::invoice_delete::InvoiceDelete;
+pub type PreApprovalRequest = requests::pre_approval::PreApproval;
+pub type BcAuthorizeRequest = requests::bc_authorize::BcAuthorize;
+pub type AccessTokenRequest = requests::access_token::AccessTokenRequest;
 
-
+// Products
 pub type Collection = products::collection::Collection;
 pub type Remittance = products::remittance::Remittance;
 pub type Disbursements = products::disbursements::Disbursements;
 pub type Provisioning = products::provisioning::Provisioning;
+
+// Responses
+pub type TokenResponse = responses::token_response::TokenResponse;
+pub type BCAuthorizeResponse = responses::bcauthorize_response::BCAuthorizeResponse;
+pub type OAuth2TokenResponse = responses::oauth2tokenresponse::OAuth2TokenResponse;
+pub type BasicUserInfoJsonResponse = responses::account_info::BasicUserInfoJsonResponse;
+pub type InvoiceResult = responses::invoice::InvoiceResult;
+pub type PaymentResult = responses::payment_result::PaymentResult;
+pub type PreApprovalResult = responses::pre_approval::PreApprovalResult;
+pub type RequestToPayResult = responses::request_to_pay_result::RequestToPayResult;
+pub type CashTransferResult = responses::cash_transfer_result::CashTransferResult;
+pub type TransferResult = responses::transfer_result::TransferResult;
+
+
+
+
+
+pub struct TranserId(String);
+
+impl TranserId {
+    pub fn as_string(&self) -> String {
+        self.0.clone()
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+pub struct TransactionId(String);
+
+impl TransactionId {
+    pub fn as_string(&self) -> String {
+        self.0.clone()
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+pub struct RefundId(String);
+
+impl RefundId {
+    pub fn as_string(&self) -> String {
+        self.0.clone()
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+pub struct InvoiceId(String);
+
+impl InvoiceId {
+    pub fn as_string(&self) -> String {
+        self.0.clone()
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+pub struct PaymentId(String);
+
+impl PaymentId {
+    pub fn as_string(&self) -> String {
+        self.0.clone()
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+
+pub struct WithdrawId(String);
+
+impl WithdrawId {
+    pub fn as_string(&self) -> String {
+        self.0.clone()
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+
+pub struct DepositId(String);
+
+impl DepositId {
+    pub fn as_string(&self) -> String {
+        self.0.clone()
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
 
 
 
@@ -221,7 +317,7 @@ mod tests {
     use std::env;
     use dotenv::dotenv;
 
-    use crate::{structs::party::Party, enums::{party_id_type::PartyIdType, currency::Currency}, requests::request_to_pay::RequestToPay};
+    use crate::{Party, PartyIdType, Currency,RequestToPay};
 
     use super::*;
     
