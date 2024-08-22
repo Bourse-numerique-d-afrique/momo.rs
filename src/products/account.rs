@@ -4,7 +4,14 @@ pub struct Account {}
 
 impl Account {
     /// This operation is used to get the balance of the account.
-    /// #Returns
+    /// # Parameters
+    ///
+    /// * 'url', the url of the product to get balance from
+    /// * 'environment', the environment of the installation
+    /// * 'primary_key', the primary key of the installation
+    /// * 'access_token', the access token to be used to make the request
+    ///
+    /// # Returns
     ///
     /// * 'Balance', the balance
     pub async fn get_account_balance(
@@ -38,11 +45,15 @@ impl Account {
 
     /// this operation is used to get the balance of an account in a specific currency
     ///
-    /// #Parameters
+    /// # Parameters
     ///
+    /// * 'url', the url of the product to get balance from
     /// * 'currency', Currency of the account to get balance from
+    /// * 'environment', the environment of the installation
+    /// * 'primary_key', the primary key of the installation
+    /// * 'access_token', the access token to be used to make the request
     ///
-    /// #Returns
+    /// # Returns
     ///
     /// * 'Balance', the balance
     pub async fn get_account_balance_in_specific_currency(
@@ -80,11 +91,14 @@ impl Account {
 
     /// This operation is used to get the basic information of the account holder
     ///
-    /// #Parameters
-    ///
+    /// # Parameters
+    /// * 'url', the url of the product to get balance from
+    /// * 'environment', the environment of the installation
+    /// * 'primary_key', the primary key of the installation
     /// * 'account_holder_msisdn', the MSISDN of the account holder
+    /// * 'access_token', the access token to be used to make the request
     ///
-    /// #Returns
+    /// # Returns
     ///
     /// * 'BasicUserInfoJsonResponse'
     pub async fn get_basic_user_info(
@@ -123,11 +137,14 @@ impl Account {
 
     /// This operation is used to get the basic information of the account holder.
     ///
-    /// #Parameters
+    /// # Parameters
     ///
+    /// * 'url', the url of the product to get balance from
+    /// * 'environment', the environment of the installation
+    /// * 'primary_key', the primary key of the installation
     /// * 'access_token', the access token of the account holder
     ///
-    /// #Returns
+    /// # Returns
     ///
     /// * 'BasicUserInfoJsonResponse'
     pub async fn get_user_info_with_consent(
@@ -161,13 +178,18 @@ impl Account {
 
     /// this operation is used to validate the status of an account holder.
     ///
-    /// #Parameters
+    /// # Parameters
+    ///
+    /// * 'url', the url of the product to get balance from
+    /// * 'environment', the environment of the installation
+    /// * 'primary_key', the primary key of the installation
+    /// * 'access_token', the access token of the account holder
     ///
     /// * 'account_holder_id', The MSISDN or email of the account holder
     /// * 'account_holder_type', The type of the account holder.
     ///
     ///
-    /// #Returns
+    /// # Returns
     ///
     /// * ()
     pub async fn validate_account_holder_status(

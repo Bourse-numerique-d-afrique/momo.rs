@@ -8,7 +8,14 @@ pub struct Authorization {}
 impl Authorization {
     /// This operation is used to create an access token
     ///
-    /// #Returns
+    /// # Parameters
+    ///
+    /// * 'url', the url of the product to get balance from
+    /// * 'api_user', the api user of the installation
+    /// * 'api_key', the api key of the installation
+    /// * 'primary_key', the primary key of the installation
+    ///
+    /// # Returns
     ///
     /// * 'TokenResponse'
     pub async fn create_access_token(
@@ -44,11 +51,16 @@ impl Authorization {
 
     /// This operation is used to create an OAuth2 token
     ///
-    /// #Parameters
+    /// # Parameters
     ///
+    /// * 'url', the url of the product to get balance from
+    /// * 'api_user', the api user of the installation
+    /// * 'api_key', the api key of the installation
+    /// * 'primary_key', the primary key of the installation
+    /// * 'environment', the environement of the installation
     /// * 'auth_req_id', this is the auth request id
     ///
-    /// #Returns
+    /// # Returns
     ///
     /// * 'OAuth2TokenResponse'
     pub async fn create_o_auth_2_token(
@@ -88,11 +100,15 @@ impl Authorization {
 
     /// This operation is used to authorize a user.
     ///
-    /// #Parameters
+    /// # Parameters
+    /// * 'url', the url of the product to get balance from
+    /// * 'environment', the environment of the installation
+    /// * 'primary_key', the primary key of the installation
+    /// * 'access_token', the access token to be used to make the request
     /// * 'msisdn', this is the phone number of the user
     /// * 'callback_url', this is the url that will be used to notify the client of the status of the transaction
     ///
-    /// #Returns
+    /// # Returns
     ///
     /// * 'BCAuthorizeResponse'
     pub async fn bc_authorize(

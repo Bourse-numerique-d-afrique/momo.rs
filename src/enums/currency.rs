@@ -1,15 +1,12 @@
 #[doc(hidden)]
 use core::fmt;
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub enum Currency {
-    /*
-        The following is a list of active codes of official ISO 4217 currency names as of 1 April 2022.
-        In the standard the values are called "alphabetic code", "numeric code", "minor unit", and "entity".
-    */
+    /// The following is a list of active codes of official ISO 4217 currency names as of 1 April 2022.
+    /// In the standard the values are called "alphabetic code", "numeric code", "minor unit", and "entity".
     USD,
     EUR,
     GBP,
@@ -137,7 +134,6 @@ pub enum Currency {
     SHP,
     SSP,
 }
-
 
 impl fmt::Display for Currency {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -36,13 +36,21 @@ static ACCESS_TOKEN: Lazy<Arc<Mutex<Option<TokenResponse>>>> =
     Lazy::new(|| Arc::new(Mutex::new(None)));
 
 impl Remittance {
-    /*
-       create a new instance of Remittance product
-       @param url
-       @param environment
-       @return Remittance
-
-    */
+    /// Create a new instance of Remittance product
+    ///
+    /// # Parameters
+    ///
+    /// * 'url',  MTN Core API url
+    /// * 'environment', the environment of the installation
+    /// * 'api_user'
+    /// * 'api_key'
+    /// * 'primary_key'
+    /// * 'secondary_key'
+    ///
+    ///
+    /// # Returns
+    ///
+    /// * 'Remittance', the instance of remittance
     pub fn new(
         url: String,
         environment: Environment,
@@ -63,6 +71,11 @@ impl Remittance {
         }
     }
 
+    /// This operation is used to create an access token
+    ///
+    /// # Returns
+    ///
+    /// * 'TokenResponse'
     async fn create_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
         let url = format!("{}/{}", self.url, "remittance");
         let auth = crate::products::auth::Authorization {};
@@ -79,6 +92,15 @@ impl Remittance {
         Ok(token)
     }
 
+    /// This operation is used to create an OAuth2 token
+    ///
+    /// # Parameters
+    ///
+    /// * 'auth_req_id', this is the auth request id
+    ///
+    /// # Returns
+    ///
+    /// * 'OAuth2TokenResponse'
     async fn create_o_auth_2_token(
         &self,
         auth_req_id: String,
@@ -96,6 +118,16 @@ impl Remittance {
         .await
     }
 
+    /// This operation is used to authorize a user.
+    ///
+    /// # Parameters
+    ///
+    /// * 'msisdn', this is the phone number of the user
+    /// * 'callback_url', this is the url that will be used to notify the client of the status of the transaction
+    ///
+    /// # Returns
+    ///
+    /// * 'BCAuthorizeResponse'
     async fn bc_authorize(
         &self,
         msisdn: String,
@@ -115,10 +147,10 @@ impl Remittance {
         .await
     }
 
-    /*
-       This operation is used to get the latest access token from the database
-       @return TokenResponse
-    */
+    /// This operation is used to get the latest access token from the database
+    ///
+    /// # Returns
+    /// * 'TokenResponse'
     async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
         let token = ACCESS_TOKEN.lock().await;
         if token.is_some() {
@@ -139,13 +171,16 @@ impl Remittance {
         return Ok(token);
     }
 
-    /*
-       Cash transfer operation is used to transfer an amount from the owner’s account to a payee account.
-       Status of the transaction can be validated by using GET /cashtransfer/{referenceId}
-       @param transfer
-       @param callback_url, optional, the url to be called when the transaction is completed
-       @return Ok(())
-    */
+    /// Cash transfer operation is used to transfer an amount from the owner’s account to a payee account.
+    /// Status of the transaction can be validated by using GET /cashtransfer/{referenceId}
+    ///
+    /// # Parameters
+    ///
+    /// * 'callback_url', optional, the url to be called when the transaction is completed
+    ///
+    /// # Returns
+    ///
+    /// * ()
     pub async fn cash_transfer(
         &self,
         transfer: CashTransferRequest,
@@ -180,12 +215,15 @@ impl Remittance {
         }
     }
 
-    /*
-       This operation is used to get the status of a transfer.
-       X-Reference-Id that was passed in the post is used as reference to the request.
-       @param transfer_id, the id of the transfer
-       @return CashTransferResult
-    */
+    /// This operation is used to get the status of a transfer.
+    /// X-Reference-Id that was passed in the post is used as reference to the request.
+    ///
+    /// # Parameters
+    /// * 'transfer_id', the id of the transfer
+    ///
+    /// # Returns
+    ///
+    /// * 'CashTransferResult'
     pub async fn get_cash_transfer_status(
         &self,
         transfer_id: &str,
@@ -215,12 +253,17 @@ impl Remittance {
         }
     }
 
-    /*
-       Transfer operation is used to transfer an amount from the own account to a payee account.
-       Status of the transaction can validated by using the GET /transfer/{referenceId}
-       @param transfer ,mtnmomo::Transfer
-       @return TranserId
-    */
+    /// Transfer operation is used to transfer an amount from the own account to a payee account.
+    /// Status of the transaction can validated by using the GET /transfer/{referenceId}
+    ///
+    ///
+    /// # Parameters
+    ///
+    /// * 'transfer': TransferRequest,
+    ///
+    /// # Returns
+    ///
+    /// * 'TransferId', the transfer id (MTN Momo external id)
     pub async fn transfer(
         &self,
         transfer: TransferRequest,
@@ -248,12 +291,16 @@ impl Remittance {
         }
     }
 
-    /*
-       This operation is used to get the status of a transfer.
-       X-Reference-Id that was passed in the post is used as reference to the request.
-       @param transfer_id, the id of the transfer
-       @return TransferResult
-    */
+    /// This operation is used to get the status of a transfer.
+    /// X-Reference-Id that was passed in the post is used as reference to the request.
+    ///
+    /// # Parameters
+    ///
+    /// * 'transfer_id', the id of the transfer
+    ///
+    /// # Returns
+    ///
+    /// * 'TransferResult'
     pub async fn get_transfer_status(
         &self,
         transfer_id: &str,
@@ -284,6 +331,10 @@ impl Remittance {
         }
     }
 
+    /// This operation is used to get the balance of the account.
+    /// # Returns
+    ///
+    /// * 'Balance', the balance
     pub async fn get_account_balance(&self) -> Result<Balance, Box<dyn std::error::Error>> {
         let url = format!("{}/remittance", self.url);
         let access_token = self.get_valid_access_token().await?;
@@ -297,6 +348,14 @@ impl Remittance {
             .await
     }
 
+    /// this operation is used to get the balance of an account in a specific currency
+    ///
+    /// # Parameters
+    ///
+    /// * 'currency', Currency of the account to get balance from
+    /// # Returns
+    ///
+    /// * 'Balance', the balance
     pub async fn get_account_balance_in_specific_currency(
         &self,
         currency: Currency,
@@ -314,6 +373,14 @@ impl Remittance {
             .await
     }
 
+    /// This operation is used to get the basic information of the account holder
+    ///
+    /// # Parameters
+    /// * 'account_holder_msisdn', the MSISDN of the account holder
+    ///
+    /// # Returns
+    ///
+    /// * 'BasicUserInfoJsonResponse'
     pub async fn get_basic_user_info(
         &self,
         account_holder_msisdn: &str,
@@ -331,6 +398,15 @@ impl Remittance {
             .await
     }
 
+    /// This operation is used to get the basic information of the account holder.
+    ///
+    /// # Parameters
+    ///
+    /// * 'access_token', the access token of the account holder
+    ///
+    /// # Returns
+    ///
+    /// * 'BasicUserInfoJsonResponse'
     pub async fn get_user_info_with_consent(
         &self,
         access_token: String,
@@ -346,6 +422,17 @@ impl Remittance {
             .await
     }
 
+    /// this operation is used to validate the status of an account holder.
+    ///
+    /// # Parameters
+    ///
+    /// * 'account_holder_id', The MSISDN or email of the account holder
+    /// * 'account_holder_type', The type of the account holder.
+    ///
+    ///
+    /// # Returns
+    ///
+    /// * ()
     pub async fn validate_account_holder_status(
         &self,
         account_holder_id: &str,

@@ -215,7 +215,7 @@ pub struct Momo {
 
 impl Momo {
     /// Create a new Momo instance
-    /// #Parameters
+    /// # Parameters
     /// * 'url' - the url of momo
     /// * 'api_user'
     /// * 'environment' - the environnement of the momo instance SandBox or
@@ -236,7 +236,7 @@ impl Momo {
     }
 
     /// Create a new Momo instance with provisioning
-    /// #Parameters
+    /// # Parameters
     /// * 'url' the momo instance url to use
     /// * 'subscription_key' the subscription key to use
     ///
@@ -258,12 +258,15 @@ impl Momo {
         });
     }
 
-    /*
-       create a new instance of Collection product
-       @param primary_key
-       @param secondary_key
-       @return Collection
-    */
+    /// create a new instance of Collection product
+    ///
+    /// # Parameters
+    /// * 'primary_key'
+    /// * 'secondary_key'
+    ///
+    /// # Returns
+    ///
+    /// * 'MomoCollection', instance of Momo collection product
     pub fn collection(&self, primary_key: String, secondary_key: String) -> MomoCollection {
         MomoCollection::new(
             self.url.clone(),
@@ -275,12 +278,16 @@ impl Momo {
         )
     }
 
-    /*
-       create a new instance of Disbursements product
-       @param primary_key
-       @param secondary_key
-       @return Disbursements
-    */
+    /// create a new instance of Disbursements product
+    ///
+    /// # Parameters
+    /// * 'primary_key'
+    /// * 'secondary_key'
+    ///
+    /// # Returns
+    ///
+    /// * 'MomoDisbursements', instance of Momo disbursement product
+    ///
     pub fn disbursement(&self, primary_key: String, secondary_key: String) -> MomoDisbursements {
         MomoDisbursements::new(
             self.url.clone(),
@@ -292,12 +299,17 @@ impl Momo {
         )
     }
 
-    /*
-       create a new instance of Remittance product
-       @param primary_key
-       @param secondary_key
-       @return Remittance
-    */
+    /// create a new instance of Remittance product
+    ///
+    /// # Parameters
+    /// * 'primary_key'
+    /// * 'secondary_key'
+    ///
+    /// # Returns
+    ///
+    /// * 'MomoRemittance', instance of Momo remittance product
+    ///
+    ///
     pub fn remittance(&self, primary_key: String, secondary_key: String) -> MomoRemittance {
         MomoRemittance::new(
             self.url.clone(),

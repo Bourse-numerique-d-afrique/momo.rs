@@ -42,7 +42,7 @@ static ACCESS_TOKEN: Lazy<Arc<Mutex<Option<TokenResponse>>>> =
 impl Collection {
     /// Create a new instance of Collection
     ///
-    /// #Parameters
+    /// # Parameters
     ///
     /// * 'url', MTN MOMO collection url
     /// * 'environment', environement to be used, default = Sandbox
@@ -51,7 +51,7 @@ impl Collection {
     /// * 'primary_key', the primary key of the collection product
     /// * 'secondary_key', the secondary key of the collection product
     ///
-    /// #Returns
+    /// # Returns
     /// * Collection
     pub fn new(
         url: String,
@@ -73,6 +73,11 @@ impl Collection {
         }
     }
 
+    /// This operation is used to create an access token
+    ///
+    /// # Returns
+    ///
+    /// * 'TokenResponse'
     async fn create_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
         let url = format!("{}/{}", self.url, "collection");
         let auth = crate::products::auth::Authorization {};
@@ -89,6 +94,15 @@ impl Collection {
         Ok(token)
     }
 
+    /// This operation is used to create an OAuth2 token
+    ///
+    /// # Parameters
+    ///
+    /// * 'auth_req_id', this is the auth request id
+    ///
+    /// # Returns
+    ///
+    /// * 'OAuth2TokenResponse'
     async fn create_o_auth_2_token(
         &self,
         auth_req_id: String,
@@ -106,6 +120,16 @@ impl Collection {
         .await
     }
 
+    /// This operation is used to authorize a user.
+    ///
+    /// # Parameters
+    ///
+    /// * 'msisdn', this is the phone number of the user
+    /// * 'callback_url', this is the url that will be used to notify the client of the status of the transaction
+    ///
+    /// # Returns
+    ///
+    /// * 'BCAuthorizeResponse'
     async fn bc_authorize(
         &self,
         msisdn: String,
@@ -127,7 +151,7 @@ impl Collection {
 
     /// This operation is used to get the latest access token from the database
     ///
-    /// #Returns
+    /// # Returns
     /// * 'TokenResponse'
     async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
         let token = ACCESS_TOKEN.lock().await;
@@ -151,12 +175,12 @@ impl Collection {
 
     /// This operation is used to cancel an invoice.
     ///
-    /// #Parameters
+    /// # Parameters
     ///
     /// * 'invoice_id', the reference id of the invoice
     /// * 'callback_url', The callback url to be used by the MOMO Core API to notify the merchant of the invoice status
     ///
-    /// #Returns
+    /// # Returns
     /// * (), the request is ok
     pub async fn cancel_invoice(
         &self,
@@ -199,12 +223,12 @@ impl Collection {
 
     /// Create an invoice that can be paid by an intended payer via any channel at a later stage
     ///
-    /// #Parameters
+    /// # Parameters
     ///
     /// * 'invoice': InvoiceRequest, the invoice to be created on the MOMO Core API
     /// * 'callback_url', The callback url to be used by the MOMO Core API to notify the merchant of the invoice status
     ///
-    /// #Returns
+    /// # Returns
     ///
     /// * 'InvoiceId', the is the exeternal id of the invoice
     pub async fn create_invoice(
@@ -245,11 +269,11 @@ impl Collection {
 
     /// Create a payment for an externa bills or perform a air-time top_ups.
     ///
-    /// #Parameters
+    /// # Parameters
     /// * 'payment': CreatePaymentRequest, the payment to be created on the Momo Core API
     /// * 'callback_url', The callback url to be used by the MOMO Core API to notify the merchant of the payment status
     ///
-    /// #Returns
+    /// # Returns
     ///
     /// * 'PaymentId', this is the external id of the payment
     pub async fn create_payments(
@@ -288,11 +312,11 @@ impl Collection {
 
     /// This operation is used to get the status of an invoice
     ///
-    /// #Parameters
+    /// # Parameters
     ///
     /// * 'invoice_id': String, the invoice id to get the status from
     ///
-    /// #Returns
+    /// # Returns
     ///
     /// * 'InvoiceResult'
     #[allow(dead_code)]
@@ -327,12 +351,12 @@ impl Collection {
 
     /// This operation is used to get the status of a payment.
     ///
-    /// #Parameters
+    /// # Parameters
     ///
     /// * 'payment_id': String, the payment id to get the status from
     ///
     ///
-    /// #Returns
+    /// # Returns
     ///
     /// * 'PaymentResult'
     #[allow(dead_code)]
@@ -368,11 +392,11 @@ impl Collection {
     /// This operation is used to get the status of a pre-approval
     ///
     ///
-    /// #Parameters
+    /// # Parameters
     ///
     /// * 'pre_approval_id', The pre-approval id to get the status
     ///
-    /// #Returns
+    /// # Returns
     ///
     /// * 'PreApprovalResult'
     #[allow(dead_code)]
@@ -408,7 +432,7 @@ impl Collection {
 
     /// Preapproval operation is used to create a pre-approval.
     ///
-    /// #Parameters
+    /// # Parameters
     ///
     /// * 'preaproval'; the pre-approval to be created on the MOMO Core API
     pub async fn pre_approval(
@@ -446,11 +470,11 @@ impl Collection {
     /// Status of the transaction can be validated by using the GET /requesttopay/<resourceId>
     ///
     ///
-    /// #Parameters
+    /// # Parameters
     ///
     /// * 'request': RequestToPay
     ///
-    /// #Returns
+    /// # Returns
     ///
     /// * 'TransactionId' (external_id), the transaction id of the payment.
     pub async fn request_to_pay(
@@ -483,12 +507,12 @@ impl Collection {
 
     /// This operation is used to send additional Notificatio  to an end user.
     ///
-    /// #Parameters
+    /// # Parameters
     ///
     /// * 'external_id', this is the external id of the request to pay
     /// * 'notification': DeliveryNotificationRequest
     ///
-    /// #Returns
+    /// # Returns
     ///
     /// * ()
     pub async fn request_to_pay_delivery_notification(
@@ -525,11 +549,11 @@ impl Collection {
 
     /// this operation is used to get the status of a request to pay.
     ///
-    /// #Parameters
+    /// # Parameters
     ///
     /// * 'payment_id', the payment id that we are trying to get the status
     ///
-    /// #Returns
+    /// # Returns
     ///
     /// *  'RequestToPayResult', the is the result of the request to pay
     pub async fn request_to_pay_transaction_status(
@@ -564,11 +588,11 @@ impl Collection {
 
     /// This operation is used to get the status of a request to withdraw
     ///
-    /// #Parameters
+    /// # Parameters
     ///
     /// * 'payment_id', the payment id to be cancelled, external_id of the request to pay
     ///
-    /// #Returns
+    /// # Returns
     /// * "RequestToPayResult", this is the result of the request to pay
     pub async fn request_to_withdraw_transaction_status(
         &self,
@@ -602,11 +626,11 @@ impl Collection {
     /// This operation is used to request a withdrawal (cash-out) from a consumer (Payer).
     /// The payer will be asked to authorize the withdrawal.
     /// The transaction will be executed once the payer has authorized the withdrawal
-    /// #Parameters
+    /// # Parameters
     /// * 'request': RequestToPay, this is the request to withwray
     /// * 'callback_url': Option<&str>, this is the callback url to be used by the MOMO Core API to notify the merchant of the request to withdraw status
     ///
-    /// #Returns
+    /// # Returns
     /// * WithdrawId, this is the external_id of the request to withdraw
     pub async fn request_to_withdraw_v1(
         &self,
@@ -646,13 +670,13 @@ impl Collection {
     /// the payer will be asked to authorize the withdrawal.
     /// the transaction will be executed once the payer has authorized the withdrawal.
     ///
-    /// *Parameters
+    /// # Parameters
     ///
     /// * 'request': RequestToPay, this is the request to withdraw
     /// * 'callback_url', this is the callback url to be used by the MOMO Core API to notify the merchant of the request to withdraw status
     ///
     ///
-    /// #Returns
+    /// # Returns
     ///
     /// * 'WithdrawId', the reference id of the request
 
@@ -690,6 +714,10 @@ impl Collection {
         }
     }
 
+    /// This operation is used to get the balance of the account.
+    /// # Returns
+    ///
+    /// * 'Balance', the balance
     pub async fn get_account_balance(&self) -> Result<Balance, Box<dyn std::error::Error>> {
         let url = format!("{}/collection", self.url);
         let access_token = self.get_valid_access_token().await?;
@@ -703,6 +731,14 @@ impl Collection {
             .await
     }
 
+    /// this operation is used to get the balance of an account in a specific currency
+    ///
+    /// # Parameters
+    ///
+    /// * 'currency', Currency of the account to get balance from
+    /// # Returns
+    ///
+    /// * 'Balance', the balance
     pub async fn get_account_balance_in_specific_currency(
         &self,
         currency: Currency,
@@ -720,6 +756,14 @@ impl Collection {
             .await
     }
 
+    /// This operation is used to get the basic information of the account holder
+    ///
+    /// # Parameters
+    /// * 'account_holder_msisdn', the MSISDN of the account holder
+    ///
+    /// # Returns
+    ///
+    /// * 'BasicUserInfoJsonResponse'
     pub async fn get_basic_user_info(
         &self,
         account_holder_msisdn: &str,
@@ -737,6 +781,15 @@ impl Collection {
             .await
     }
 
+    /// This operation is used to get the basic information of the account holder.
+    ///
+    /// # Parameters
+    ///
+    /// * 'access_token', the access token of the account holder
+    ///
+    /// # Returns
+    ///
+    /// * 'BasicUserInfoJsonResponse'
     pub async fn get_user_info_with_consent(
         &self,
         access_token: String,
@@ -752,6 +805,17 @@ impl Collection {
             .await
     }
 
+    /// this operation is used to validate the status of an account holder.
+    ///
+    /// # Parameters
+    ///
+    /// * 'account_holder_id', The MSISDN or email of the account holder
+    /// * 'account_holder_type', The type of the account holder.
+    ///
+    ///
+    /// # Returns
+    ///
+    /// * ()
     pub async fn validate_account_holder_status(
         &self,
         account_holder_id: &str,
@@ -771,133 +835,6 @@ impl Collection {
             .await
     }
 }
-
-// impl MOMOAuthorization for Collection {
-//     /// This operation is used to create an access token
-//     ///
-//     /// #Returns
-//     ///
-//     /// * 'TokenResponse'
-//     async fn create_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
-//         let client = reqwest::Client::new();
-//         let res = client
-//             .post(format!("{}/collection/token/", self.url))
-//             .basic_auth(self.api_user.to_string(), Some(self.api_key.to_string()))
-//             .header("Cache-Control", "no-cache")
-//             .header("Content-type", "application/x-www-form-urlencoded")
-//             .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-//             .header("Content-Length", "0")
-//             .body("")
-//             .send()
-//             .await?;
-
-//         if res.status().is_success() {
-//             let body = res.text().await?;
-//             let token_response: TokenResponse = serde_json::from_str(&body)?;
-//             let cloned = token_response.clone();
-//             let _t = task::spawn(async move {
-//                 let mut token = ACCESS_TOKEN.lock().await;
-//                 *token = Some(token_response.clone());
-//             });
-//             Ok(cloned)
-//         } else {
-//             Err(Box::new(std::io::Error::new(
-//                 std::io::ErrorKind::Other,
-//                 res.text().await?,
-//             )))
-//         }
-//     }
-
-//     /// This operation is used to create an OAuth2 token
-//     ///
-//     /// #Parameters
-//     ///
-//     /// * 'auth_req_id', this is the auth request id
-//     ///
-//     /// #Returns
-//     ///
-//     /// * 'OAuth2TokenResponse'
-//     async fn create_o_auth_2_token(
-//         &self,
-//         auth_req_id: String,
-//     ) -> Result<OAuth2TokenResponse, Box<dyn std::error::Error>> {
-//         let client = reqwest::Client::new();
-//         let res: reqwest::Response = client
-//             .post(format!("{}/collection/oauth2/token/", self.url))
-//             .basic_auth(self.api_user.to_string(), Some(self.api_key.to_string()))
-//             .header("X-Target-Environment", self.environment.to_string())
-//             .header("Content-type", "application/x-www-form-urlencoded")
-//             .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-//             .body(AccessTokenRequest {
-//                 grant_type: "urn:openid:params:grant-type:ciba".to_string(),
-//                 auth_req_id,
-//             })
-//             .send()
-//             .await?;
-
-//         if res.status().is_success() {
-//             let body = res.text().await?;
-//             let token_response: OAuth2TokenResponse = serde_json::from_str(&body)?;
-//             Ok(token_response)
-//         } else {
-//             Err(Box::new(std::io::Error::new(
-//                 std::io::ErrorKind::Other,
-//                 res.text().await?,
-//             )))
-//         }
-//     }
-
-//     /// This operation is used to authorize a user.
-//     ///
-//     /// #Parameters
-//     /// * 'msisdn', this is the phone number of the user
-//     /// * 'callback_url', this is the url that will be used to notify the client of the status of the transaction
-//     ///
-//     /// #Returns
-//     ///
-//     /// * 'BCAuthorizeResponse'
-//     async fn bc_authorize(
-//         &self,
-//         msisdn: String,
-//         callback_url: Option<&str>,
-//     ) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
-//         let client = reqwest::Client::new();
-//         let access_token = self.get_valid_access_token().await?;
-//         let mut req = client
-//             .post(format!("{}/collection/v1_0/bc-authorize", self.url))
-//             .bearer_auth(access_token.access_token)
-//             .header("X-Target-Environment", self.environment.to_string())
-//             .header("Content-type", "application/x-www-form-urlencoded")
-//             .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-//             .body(
-//                 BcAuthorizeRequest {
-//                     login_hint: format!("ID:{}/MSISDN", msisdn),
-//                     scope: "profile".to_string(),
-//                     access_type: AccessType::Offline,
-//                 }
-//                 .to_string(),
-//             );
-
-//         if let Some(callback_url) = callback_url {
-//             if !callback_url.is_empty() {
-//                 req = req.header("X-Callback-Url", callback_url);
-//             }
-//         }
-
-//         let res = req.send().await?;
-
-//         if res.status().is_success() {
-//             let body = res.text().await?;
-//             let token_response: BCAuthorizeResponse = serde_json::from_str(&body)?;
-//             Ok(token_response)
-//         } else {
-//             Err(Box::new(std::io::Error::new(
-//                 std::io::ErrorKind::Other,
-//                 res.text().await?,
-//             )))
-//         }
-//     }
-// }
 
 #[cfg(test)]
 mod tests {

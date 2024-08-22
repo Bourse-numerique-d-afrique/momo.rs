@@ -64,6 +64,11 @@ impl Disbursements {
         }
     }
 
+    /// This operation is used to create an access token
+    ///
+    /// # Returns
+    ///
+    /// * 'TokenResponse'
     async fn create_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
         let url = format!("{}/{}", self.url, "disbursement");
         let auth = crate::products::auth::Authorization {};
@@ -80,6 +85,15 @@ impl Disbursements {
         Ok(token)
     }
 
+    /// This operation is used to create an OAuth2 token
+    ///
+    /// # Parameters
+    ///
+    /// * 'auth_req_id', this is the auth request id
+    ///
+    /// # Returns
+    ///
+    /// * 'OAuth2TokenResponse'
     async fn create_o_auth_2_token(
         &self,
         auth_req_id: String,
@@ -97,6 +111,16 @@ impl Disbursements {
         .await
     }
 
+    /// This operation is used to authorize a user.
+    ///
+    /// # Parameters
+    ///
+    /// * 'msisdn', this is the phone number of the user
+    /// * 'callback_url', this is the url that will be used to notify the client of the status of the transaction
+    ///
+    /// # Returns
+    ///
+    /// * 'BCAuthorizeResponse'
     async fn bc_authorize(
         &self,
         msisdn: String,
@@ -116,10 +140,10 @@ impl Disbursements {
         .await
     }
 
-    /*
-       This operation is used to get the latest access token from the database
-       @return TokenResponse
-    */
+    /// This operation is used to get the latest access token from the database
+    ///
+    /// # Returns
+    /// * 'TokenResponse'
     async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
         let token = ACCESS_TOKEN.lock().await;
         if token.is_some() {
@@ -140,12 +164,16 @@ impl Disbursements {
         return Ok(token);
     }
 
-    /*
-       deposit operation is used to deposit an amount from the owner’s account to a payee account.
-       Status of the transaction can be validated by using the GET /deposit/{referenceId}
-       @param transfer
-       @return DepositId, this is the reference id of the transaction (mtn external id)
-    */
+    /// Deposit operation is used to deposit an amount from the owner’s account to a payee account.
+    /// Status of the transaction can be validated by using the GET /deposit/{referenceId}
+    ///
+    /// # Parameters
+    ///
+    /// * 'transfer': TransferRequest
+    ///
+    /// # Returns
+    ///
+    /// * 'DepositId' (mtn external id)
     pub async fn deposit_v1(
         &self,
         transfer: TransferRequest,
@@ -174,12 +202,16 @@ impl Disbursements {
         }
     }
 
-    /*
-       deposit operation is used to deposit an amount from the owner’s account to a payee account.
-       Status of the transaction can be validated by using the GET /deposit/{referenceId}
-       @param transfer
-       @return DepositId, this is the reference id of the transaction (mtn external id)
-    */
+    /// Deposit operation (V2) is used to deposit an amount from the owner’s account to a payee account.
+    /// Status of the transaction can be validated by using the GET /deposit/{referenceId}
+    ///
+    /// # Parameters
+    ///
+    /// * 'transfer': TransferRequest
+    ///
+    /// # Returns
+    ///
+    /// * 'DepositId' (mtn external id)
     pub async fn deposit_v2(
         &self,
         transfer: TransferRequest,
@@ -208,12 +240,16 @@ impl Disbursements {
         }
     }
 
-    /*
-       This operation is used to get the status of a deposit.
-       X-Reference-Id that was passed in the post is used as reference to the request.
-       @param deposit_id
-       @return TransferResult
-    */
+    /// This operation is used to get the status of a deposit.
+    /// X-Reference-Id that was passed in the post is used as reference to the request.
+    ///
+    /// # Parameters
+    ///
+    /// * 'deposit_id', the mtn external id of the the deposit
+    ///
+    /// # Returns
+    ///
+    /// * 'TransferResult'
     pub async fn get_deposit_status(
         &self,
         deposit_id: String,
@@ -244,13 +280,16 @@ impl Disbursements {
         }
     }
 
-    /*
-       This operation is used to get the status of a refund.
-       X-Reference-Id that was passed in the post is used as reference to the request.
-
-       @param reference_id
-       @return RefundResult
-    */
+    /// This operation is used to get the status of a refund.
+    /// X-Reference-Id that was passed in the post is used as reference to the request.
+    ///
+    /// # Parameters
+    ///
+    /// * 'reference_id', the external if of the refund
+    ///
+    /// # Returns
+    ///
+    /// * 'RefundResult'
     pub async fn get_refund_status(
         &self,
         reference_id: &str,
@@ -281,12 +320,16 @@ impl Disbursements {
         }
     }
 
-    /*
-       This operation is used to get the status of a transfer.
-       X-Reference-Id that was passed in the post is used as reference to the request.
-       @param transfer_id, this is the reference id of the transaction (mtn external id)
-       @return TransferResult
-    */
+    /// This operation is used to get the status of a transfer
+    /// X-Reference-Id that was passed in the post is used as reference to the request.
+    ///
+    /// # Parameters
+    ///
+    /// * 'transfer_id', this is the reference id of the transaction (mtn external id)
+    ///
+    /// # Returns
+    ///
+    /// * 'TransferResult'
     pub async fn get_transfer_status(
         &self,
         transfer_id: &str,
@@ -317,13 +360,17 @@ impl Disbursements {
         }
     }
 
-    /*
-       refund operation is used to refund an amount from the owner’s account to a payee account.
-       Status of the transaction can be validated by using the GET /refund/{referenceId}
-       @param refund struct containing the refund details
-       @param callback_url, this is the url that will be used to notify the client of the status of the transaction
-       @return RefundId, this is the reference id of the transaction (mtn external id)
-    */
+    /// Refund operation is used to refund an amount from the owner’s account to a payee account.
+    /// Status of the transaction can be validated by using the GET /refund/{referenceId}
+    ///
+    /// # Parameters
+    ///
+    /// * 'refund', refund struct containing the refund details
+    /// * 'callback_url', this is the url that will be used to notify the client of the status of the transaction
+    ///
+    /// # Returns
+    ///
+    /// * 'RefundId', this is the reference id of the transaction (mtn external id)
     pub async fn refund_v1(
         &self,
         refund: RefundRequest,
@@ -359,13 +406,17 @@ impl Disbursements {
         }
     }
 
-    /*
-       refund operation is used to refund an amount from the owner’s account to a payee account.
-       Status of the transaction can be validated by using the GET /refund/{referenceId}
-       @param refund struct containing the refund details
-       @param callback_url, this is the url that will be used to notify the client of the status of the transaction
-       @return RefundId, this is the reference id of the transaction (mtn external id)
-    */
+    /// Refund operation (V2) is used to refund an amount from the owner’s account to a payee account.
+    /// Status of the transaction can be validated by using the GET /refund/{referenceId}
+    ///
+    /// # Parameters
+    ///
+    /// * 'refund', refund struct containing the refund details
+    /// * 'callback_url', this is the url that will be used to notify the client of the status of the transaction
+    ///
+    /// # Returns
+    ///
+    /// * 'RefundId', this is the reference id of the transaction (mtn external id)
     pub async fn refund_v2(
         &self,
         refund: RefundRequest,
@@ -401,12 +452,16 @@ impl Disbursements {
         }
     }
 
-    /*
-       transfer operation is used to transfer an amount from the owner’s account to a payee account.
-       Status of the transaction can be validated by using the GET /transfer/{referenceId}
-       @param transfer struct containing the transfer details
-       @return TranserId, this is the reference id of the transaction (mtn external id)
-    */
+    /// Transfer operation is used to transfer an amount from the owner’s account to a payee account.
+    /// Status of the transaction can be validated by using the GET /transfer/{referenceId}
+    ///
+    /// # Parameters
+    ///
+    /// * 'transfer', transfer struct containing the transfer details
+    ///
+    /// # Returns
+    ///
+    /// * 'TranserId', this is the reference id of the transaction (mtn external id)
     pub async fn transfer(
         &self,
         transfer: TransferRequest,
@@ -434,6 +489,10 @@ impl Disbursements {
         }
     }
 
+    /// This operation is used to get the balance of the account.
+    /// # Returns
+    ///
+    /// * 'Balance', the balance
     pub async fn get_account_balance(&self) -> Result<Balance, Box<dyn std::error::Error>> {
         let url = format!("{}/disbursement", self.url);
         let access_token = self.get_valid_access_token().await?;
@@ -447,6 +506,14 @@ impl Disbursements {
             .await
     }
 
+    /// this operation is used to get the balance of an account in a specific currency
+    ///
+    /// # Parameters
+    ///
+    /// * 'currency', Currency of the account to get balance from
+    /// # Returns
+    ///
+    /// * 'Balance', the balance
     pub async fn get_account_balance_in_specific_currency(
         &self,
         currency: Currency,
@@ -464,6 +531,14 @@ impl Disbursements {
             .await
     }
 
+    /// This operation is used to get the basic information of the account holder
+    ///
+    /// # Parameters
+    /// * 'account_holder_msisdn', the MSISDN of the account holder
+    ///
+    /// # Returns
+    ///
+    /// * 'BasicUserInfoJsonResponse'
     pub async fn get_basic_user_info(
         &self,
         account_holder_msisdn: &str,
@@ -481,6 +556,15 @@ impl Disbursements {
             .await
     }
 
+    /// This operation is used to get the basic information of the account holder.
+    ///
+    /// # Parameters
+    ///
+    /// * 'access_token', the access token of the account holder
+    ///
+    /// # Returns
+    ///
+    /// * 'BasicUserInfoJsonResponse'
     pub async fn get_user_info_with_consent(
         &self,
         access_token: String,
@@ -496,6 +580,17 @@ impl Disbursements {
             .await
     }
 
+    /// this operation is used to validate the status of an account holder.
+    ///
+    /// # Parameters
+    ///
+    /// * 'account_holder_id', The MSISDN or email of the account holder
+    /// * 'account_holder_type', The type of the account holder.
+    ///
+    ///
+    /// # Returns
+    ///
+    /// * ()
     pub async fn validate_account_holder_status(
         &self,
         account_holder_id: &str,

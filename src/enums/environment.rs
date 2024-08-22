@@ -2,14 +2,11 @@
 use std::fmt;
 
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub enum Environment {
-    /*
-        The following environments are available
-    */
+    /// The following environments are available
     Sandbox,
     MTNUGANDA,
     MTNIVORYCOAST,
@@ -24,7 +21,6 @@ pub enum Environment {
     MTNSOUTHAFRICA,
     Live,
 }
-
 
 impl fmt::Display for Environment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
