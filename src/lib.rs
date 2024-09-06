@@ -70,7 +70,12 @@
 #[doc(hidden)]
 use std::error::Error;
 
+use poem::{listener::TcpListener, post, EndpointExt};
 use uuid::Uuid;
+
+use poem::Result;
+#[doc(hidden)]
+use poem::{handler, Route, Server};
 
 pub mod enums;
 pub mod errors;
@@ -204,6 +209,47 @@ impl DepositId {
     }
 }
 
+#[handler]
+fn mtn_callback(req: &poem::Request) -> poem::Response {
+    poem::Response::builder()
+        .status(poem::http::StatusCode::OK)
+        .body("Callback received successfully")
+}
+
+#[handler]
+fn mtn_put_calback(req: &poem::Request) -> poem::Response {
+    println!("yes put boatch");
+    poem::Response::builder()
+        .status(poem::http::StatusCode::OK)
+        .body("Callback received successfully")
+}
+
+pub struct MomoCallbackListener;
+
+impl MomoCallbackListener {
+    pub async fn serve(port: String) -> Result<(), Box<dyn Error>> {
+        use tracing_subscriber;
+
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::TRACE)
+            .init();
+
+        std::env::set_var("RUST_BACKTRACE", "1");
+        let app = Route::new()
+            .at("/mtn", post(mtn_callback).put(mtn_put_calback))
+            .with(poem::middleware::Tracing::default())
+            .with(poem::middleware::Cors::new())
+            .with(poem::middleware::Compression::default())
+            .with(poem::middleware::RequestId::default());
+
+        Server::new(TcpListener::bind(format!("0.0.0.0:{}", port)))
+            .run(app)
+            .await
+            .expect("the server failed to start");
+        Ok(())
+    }
+}
+
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct Momo {
@@ -239,16 +285,20 @@ impl Momo {
     /// # Parameters
     /// * 'url' the momo instance url to use
     /// * 'subscription_key' the subscription key to use
+    /// * 'provider_callback_host', the callback host that will be used to send momo updates (ex: google.com)
     ///
     /// #Returns
     /// Result<Momo, Box<dyn Error>>
     pub async fn new_with_provisioning(
         url: String,
         subscription_key: String,
+        provider_callback_host: &str,
     ) -> Result<Momo, Box<dyn Error>> {
         let provisioning = MomoProvisioning::new(url.clone(), subscription_key.clone());
         let reference_id = Uuid::new_v4().to_string();
-        let _create_sandbox = provisioning.create_sandox(&reference_id).await?;
+        let _create_sandbox = provisioning
+            .create_sandox(&reference_id, provider_callback_host)
+            .await?;
         let api = provisioning.create_api_information(&reference_id).await?;
         return Ok(Momo {
             url,
@@ -338,7 +388,7 @@ mod tests {
         let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
         let secondary_key =
             env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
-        let momo = Momo::new_with_provisioning(mtn_url, primary_key.clone())
+        let momo = Momo::new_with_provisioning(mtn_url, primary_key.clone(), "test")
             .await
             .unwrap();
         let collection = momo.collection(primary_key, secondary_key);
@@ -356,7 +406,7 @@ mod tests {
             "test_payer_message".to_string(),
             "test_payee_note".to_string(),
         );
-        let result = collection.request_to_pay(request).await;
+        let result = collection.request_to_pay(request, None).await;
         assert!(result.is_ok());
     }
 }

@@ -969,7 +969,7 @@ mod tests {
             "test_payer_message".to_string(),
             "test_payee_note".to_string(),
         );
-        let res = collection.request_to_pay(request).await;
+        let res = collection.request_to_pay(request, None).await;
         assert!(res.is_ok());
 
         let refund = RefundRequest::new(
@@ -1029,7 +1029,7 @@ mod tests {
             "test_payer_message".to_string(),
             "test_payee_note".to_string(),
         );
-        let res = collection.request_to_pay(request).await;
+        let res = collection.request_to_pay(request, None).await;
         assert!(res.is_ok());
 
         let refund = RefundRequest::new(
@@ -1088,7 +1088,7 @@ mod tests {
             "test_payer_message".to_string(),
             "test_payee_note".to_string(),
         );
-        let res = collection.request_to_pay(request).await;
+        let res = collection.request_to_pay(request, None).await;
         assert!(res.is_ok());
 
         let refund = RefundRequest::new(

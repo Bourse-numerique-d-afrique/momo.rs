@@ -19,9 +19,9 @@ use crate::{
 };
 use chrono::Utc;
 use once_cell::sync::Lazy;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
-use super::account::Account;
+use super::{account::Account, auth::Authorization};
 
 /// # Collection
 /// This product provides a way to request payments from a customer.
@@ -34,10 +34,11 @@ pub struct Collection {
     pub api_user: String,
     pub api_key: String,
     account: Account,
+    auth: Authorization,
 }
 
-static ACCESS_TOKEN: Lazy<Arc<Mutex<Option<TokenResponse>>>> =
-    Lazy::new(|| Arc::new(Mutex::new(None)));
+static ACCESS_TOKEN: Lazy<Arc<RwLock<Option<TokenResponse>>>> =
+    Lazy::new(|| Arc::new(RwLock::new(None)));
 
 impl Collection {
     /// Create a new instance of Collection
@@ -62,6 +63,7 @@ impl Collection {
         secondary_key: String,
     ) -> Collection {
         let account = Account {};
+        let auth = Authorization {};
         Collection {
             url,
             primary_key,
@@ -70,6 +72,7 @@ impl Collection {
             api_user,
             api_key,
             account,
+            auth,
         }
     }
 
@@ -80,8 +83,8 @@ impl Collection {
     /// * 'TokenResponse'
     async fn create_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
         let url = format!("{}/{}", self.url, "collection");
-        let auth = crate::products::auth::Authorization {};
-        let token = auth
+        let token = self
+            .auth
             .create_access_token(
                 url,
                 self.api_user.clone(),
@@ -89,7 +92,8 @@ impl Collection {
                 self.primary_key.clone(),
             )
             .await?;
-        let mut token_ = ACCESS_TOKEN.lock().await;
+
+        let mut token_ = ACCESS_TOKEN.write().await;
         *token_ = Some(token.clone());
         Ok(token)
     }
@@ -108,16 +112,16 @@ impl Collection {
         auth_req_id: String,
     ) -> Result<OAuth2TokenResponse, Box<dyn std::error::Error>> {
         let url = format!("{}/{}", self.url, "collection");
-        let auth = crate::products::auth::Authorization {};
-        auth.create_o_auth_2_token(
-            url,
-            self.api_user.clone(),
-            self.api_key.clone(),
-            self.environment.clone(),
-            self.primary_key.clone(),
-            auth_req_id,
-        )
-        .await
+        self.auth
+            .create_o_auth_2_token(
+                url,
+                self.api_user.clone(),
+                self.api_key.clone(),
+                self.environment.clone(),
+                self.primary_key.clone(),
+                auth_req_id,
+            )
+            .await
     }
 
     /// This operation is used to authorize a user.
@@ -136,17 +140,17 @@ impl Collection {
         callback_url: Option<&str>,
     ) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
         let url = format!("{}/{}", self.url, "collection");
-        let auth = crate::products::auth::Authorization {};
         let access_token: TokenResponse = self.create_access_token().await?;
-        auth.bc_authorize(
-            url,
-            self.environment.clone(),
-            self.primary_key.clone(),
-            msisdn,
-            callback_url,
-            access_token,
-        )
-        .await
+        self.auth
+            .bc_authorize(
+                url,
+                self.environment.clone(),
+                self.primary_key.clone(),
+                msisdn,
+                callback_url,
+                access_token,
+            )
+            .await
     }
 
     /// This operation is used to get the latest access token from the database
@@ -154,7 +158,7 @@ impl Collection {
     /// # Returns
     /// * 'TokenResponse'
     async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
-        let token = ACCESS_TOKEN.lock().await;
+        let token = ACCESS_TOKEN.read().await;
         if token.is_some() {
             let token = token.clone().unwrap();
             if token.created_at.is_some() {
@@ -165,10 +169,12 @@ impl Collection {
                 if duration.num_seconds() < expires_in as i64 {
                     return Ok(token);
                 }
+                drop(token);
                 let token: TokenResponse = self.create_access_token().await?;
                 return Ok(token);
             }
         }
+        drop(token);
         let token: TokenResponse = self.create_access_token().await?;
         return Ok(token);
     }
@@ -241,7 +247,6 @@ impl Collection {
         let mut req = client
             .post(format!("{}/collection/v2_0/invoice", self.url))
             .bearer_auth(access_token.access_token)
-            //.header("X-Callback-Url", callback_url.unwrap_or(""))
             .header("X-Reference-Id", &invoice.external_id)
             .header("X-Target-Environment", self.environment.to_string())
             .header("Content-Type", "application/json")
@@ -473,6 +478,7 @@ impl Collection {
     /// # Parameters
     ///
     /// * 'request': RequestToPay
+    /// * 'callback_url', the callback url to send updates to
     ///
     /// # Returns
     ///
@@ -480,10 +486,11 @@ impl Collection {
     pub async fn request_to_pay(
         &self,
         request: RequestToPay,
+        callback_url: Option<&str>,
     ) -> Result<TransactionId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
-        let res = client
+        let mut req = client
             .post(format!("{}/collection/v1_0/requesttopay", self.url))
             .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
@@ -491,9 +498,15 @@ impl Collection {
             .header("Content-Type", "application/json")
             .header("X-Reference-Id", &request.external_id)
             .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-            .body(request.clone())
-            .send()
-            .await?;
+            .body(request.clone());
+
+        if let Some(callback_url) = callback_url {
+            if !callback_url.is_empty() {
+                req = req.header("X-Callback-Url", callback_url);
+            }
+        }
+
+        let res = req.send().await?;
 
         if res.status().is_success() {
             Ok(TransactionId(request.external_id))
@@ -505,7 +518,7 @@ impl Collection {
         }
     }
 
-    /// This operation is used to send additional Notificatio  to an end user.
+    /// This operation is used to send additional Notification  to an end user.
     ///
     /// # Parameters
     ///
@@ -916,7 +929,7 @@ mod tests {
             "test_payer_message".to_string(),
             "test_payee_note".to_string(),
         );
-        let res = collection.request_to_pay(request).await;
+        let res = collection.request_to_pay(request, None).await;
         assert!(res.is_ok());
     }
 
@@ -951,7 +964,7 @@ mod tests {
             "test_payee_note".to_string(),
         );
         let res = collection
-            .request_to_pay(request)
+            .request_to_pay(request, None)
             .await
             .expect("Error requesting payment");
 
@@ -995,7 +1008,7 @@ mod tests {
             "test_payee_note".to_string(),
         );
         let res = collection
-            .request_to_pay(request)
+            .request_to_pay(request, None)
             .await
             .expect("Error requesting payment");
 
