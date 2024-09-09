@@ -67,10 +67,16 @@
 //! If the customer confirms the payment, the payment will be processed and the customer will receive a confirmation message.
 //! If the customer declines the payment, the payment will not be processed and the customer will receive a message informing them that the payment was declined.
 
+use futures_core::Stream;
 #[doc(hidden)]
 use std::error::Error;
+use tokio::sync::mpsc::{self, Sender};
 
-use poem::{listener::TcpListener, post, EndpointExt};
+use enums::{reason::RequestToPayReason, request_to_pay_status::RequestToPayStatus};
+use poem::{
+    error::ReadBodyError, listener::TcpListener, middleware::AddData, post, web::Data, EndpointExt,
+};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use poem::Result;
@@ -124,6 +130,21 @@ pub type PreApprovalResult = responses::pre_approval::PreApprovalResult;
 pub type RequestToPayResult = responses::request_to_pay_result::RequestToPayResult;
 pub type CashTransferResult = responses::cash_transfer_result::CashTransferResult;
 pub type TransferResult = responses::transfer_result::TransferResult;
+
+#[derive(thiserror::Error, Debug)]
+enum MomoError {
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("ReadBody error: {0}")]
+    ReadBody(#[from] ReadBodyError),
+
+    #[error("SerdeJson error: {0}")]
+    JsonError(#[from] serde_json::Error),
+
+    #[error("SendError error: {0}")]
+    SendError(#[from] tokio::sync::mpsc::error::SendError<MomoUpdates>),
+}
 
 pub struct TranserId(String);
 
@@ -209,44 +230,122 @@ impl DepositId {
     }
 }
 
-#[handler]
-fn mtn_callback(req: &poem::Request) -> poem::Response {
-    poem::Response::builder()
-        .status(poem::http::StatusCode::OK)
-        .body("Callback received successfully")
+#[derive(Deserialize, Debug)]
+pub enum CallbackResponse {
+    RequestToPaySuccess {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        amount: String,
+        currency: String,
+        payer: Party,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        status: RequestToPayStatus,
+    },
+    RequestToPayFailed {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        amount: String,
+        currency: String,
+        payer: Party,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        status: RequestToPayStatus,
+        reason: RequestToPayReason,
+    },
+}
+
+pub struct MomoUpdates {
+    pub remote_address: String,
+    pub response: CallbackResponse,
 }
 
 #[handler]
-fn mtn_put_calback(req: &poem::Request) -> poem::Response {
-    println!("yes put boatch");
-    poem::Response::builder()
+async fn mtn_callback(
+    req: &poem::Request,
+    mut body: poem::Body,
+    sender: Data<&Sender<MomoUpdates>>,
+) -> Result<poem::Response, poem::Error> {
+    let remote_address = req.remote_addr().clone();
+    let string = body.into_string().await?;
+    let response_result: Result<CallbackResponse, serde_json::Error> =
+        serde_json::from_str(&string);
+    if response_result.is_err() {}
+    let momo_updates = MomoUpdates {
+        remote_address: remote_address.to_string(),
+        response: response_result.unwrap(),
+    };
+    let listener_update = sender.send(momo_updates).await;
+    if listener_update.is_err() {}
+    Ok(poem::Response::builder()
         .status(poem::http::StatusCode::OK)
-        .body("Callback received successfully")
+        .body("Callback received successfully"))
+}
+
+#[handler]
+async fn mtn_put_calback(
+    req: &poem::Request,
+    mut body: poem::Body,
+    sender: Data<&Sender<MomoUpdates>>,
+) -> Result<poem::Response, poem::Error> {
+    let remote_address = req.remote_addr().clone();
+    let string = body.into_string().await?;
+    let response_result: Result<CallbackResponse, serde_json::Error> =
+        serde_json::from_str(&string);
+    if response_result.is_err() {}
+    let momo_updates = MomoUpdates {
+        remote_address: remote_address.to_string(),
+        response: response_result.unwrap(),
+    };
+    let listener_update = sender.send(momo_updates).await;
+    if listener_update.is_err() {}
+    Ok(poem::Response::builder()
+        .status(poem::http::StatusCode::OK)
+        .body("Callback received successfully"))
 }
 
 pub struct MomoCallbackListener;
 
 impl MomoCallbackListener {
-    pub async fn serve(port: String) -> Result<(), Box<dyn Error>> {
+    pub async fn serve(port: String) -> Result<impl Stream<Item = MomoUpdates>, Box<dyn Error>> {
         use tracing_subscriber;
 
         tracing_subscriber::fmt()
             .with_max_level(tracing::Level::TRACE)
             .init();
 
+        let (tx, mut rx) = mpsc::channel::<MomoUpdates>(32);
+
         std::env::set_var("RUST_BACKTRACE", "1");
+
         let app = Route::new()
             .at("/mtn", post(mtn_callback).put(mtn_put_calback))
             .with(poem::middleware::Tracing::default())
             .with(poem::middleware::Cors::new())
             .with(poem::middleware::Compression::default())
-            .with(poem::middleware::RequestId::default());
+            .with(poem::middleware::RequestId::default())
+            .with(AddData::new(tx));
 
-        Server::new(TcpListener::bind(format!("0.0.0.0:{}", port)))
-            .run(app)
-            .await
-            .expect("the server failed to start");
-        Ok(())
+        tokio::spawn(async move {
+            Server::new(TcpListener::bind(format!("0.0.0.0:{}", port)))
+                .run(app)
+                .await
+                .expect("the server failed to start");
+        });
+
+        Ok(async_stream::stream! {
+            while let Some(msg) = rx.recv().await {
+                yield msg;
+            }
+        })
     }
 }
 

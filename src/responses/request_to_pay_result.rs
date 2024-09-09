@@ -1,16 +1,13 @@
-
-
+use crate::structs::party::Party;
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
-use crate:: structs::party::Party;
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RequestToPayResult {
     pub amount: String,
     pub currency: String,
     #[serde(rename = "financialTransactionId")]
-    pub financial_transaction_id: String,
+    pub financial_transaction_id: Option<String>,
     #[serde(rename = "externalId")]
     pub external_id: String,
     pub payer: Party,
@@ -19,4 +16,5 @@ pub struct RequestToPayResult {
     #[serde(rename = "payeeNote")]
     pub payee_note: String,
     pub status: String,
+    pub reason: Option<String>,
 }

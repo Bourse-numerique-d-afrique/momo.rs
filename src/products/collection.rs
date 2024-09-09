@@ -107,6 +107,7 @@ impl Collection {
     /// # Returns
     ///
     /// * 'OAuth2TokenResponse'
+    #[allow(dead_code)]
     async fn create_o_auth_2_token(
         &self,
         auth_req_id: String,
@@ -134,6 +135,7 @@ impl Collection {
     /// # Returns
     ///
     /// * 'BCAuthorizeResponse'
+    #[allow(dead_code)]
     async fn bc_authorize(
         &self,
         msisdn: String,

@@ -159,8 +159,5 @@ mod tests {
         let result = provisioning.create_api_information(&reference_id).await;
         let api_key = result.unwrap();
         assert_eq!(api_key.clone().api_key.len() > 0, true);
-
-        println!("{:?}", reference_id);
-        println!("{:?}", api_key.clone());
     }
 }
