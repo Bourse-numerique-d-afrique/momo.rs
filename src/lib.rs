@@ -72,7 +72,10 @@ use futures_core::Stream;
 use std::error::Error;
 use tokio::sync::mpsc::{self, Sender};
 
-use enums::{reason::RequestToPayReason, request_to_pay_status::RequestToPayStatus};
+use enums::{
+    deposit_status::DepositStatus, reason::RequestToPayReason,
+    request_to_pay_status::RequestToPayStatus,
+};
 use poem::{
     error::ReadBodyError, listener::TcpListener, middleware::AddData, post, web::Data, EndpointExt,
 };
@@ -230,6 +233,12 @@ impl DepositId {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Reason {
+    pub code: RequestToPayReason,
+    pub message: String,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub enum CallbackResponse {
     RequestToPaySuccess {
@@ -259,7 +268,166 @@ pub enum CallbackResponse {
         #[serde(rename = "payerMessage")]
         payer_message: String,
         status: RequestToPayStatus,
-        reason: RequestToPayReason,
+        reason: Reason,
+    },
+
+    PreApprovalSuccess {
+        payer: Party,
+        #[serde(rename = "payerCurrency")]
+        payer_currency: String,
+        status: String,
+        #[serde(rename = "expirationDateTime")]
+        expiration_date_time: String,
+    },
+
+    PreApprovalFailed {
+        payer: Party,
+        #[serde(rename = "payerCurrency")]
+        payer_currency: String,
+        status: String,
+        #[serde(rename = "expirationDateTime")]
+        expiration_date_time: String,
+        reason: Reason,
+    },
+
+    PaymentSucceeded {
+        #[serde(rename = "referenceId")]
+        reference_id: String,
+        status: String,
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+    },
+
+    PaymentFailed {
+        #[serde(rename = "referenceId")]
+        reference_id: String,
+        status: String,
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        reason: Reason,
+    },
+
+    InvoiceSucceeded {
+        #[serde(rename = "referenceId")]
+        reference_id: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        amount: String,
+        currency: String,
+        status: String,
+        #[serde(rename = "paymentReference")]
+        payment_reference: String,
+        #[serde(rename = "invoiceId")]
+        invoice_id: String,
+        #[serde(rename = "expiryDateTime")]
+        expiry_date_time: String,
+        #[serde(rename = "intendedPayer")]
+        intended_payer: Party,
+        description: String,
+    },
+
+    InvoiceFailed {
+        #[serde(rename = "referenceId")]
+        reference_id: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        amount: String,
+        currency: String,
+        status: String,
+        #[serde(rename = "paymentReference")]
+        payment_reference: String,
+        #[serde(rename = "invoiceId")]
+        invoice_id: String,
+        #[serde(rename = "expiryDateTime")]
+        expiry_date_time: String,
+        #[serde(rename = "intendedPayer")]
+        intended_payer: Party,
+        description: String,
+        #[serde(rename = "errorReason")]
+        erron_reason: Reason,
+    },
+
+    CashTransferSucceeded {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        status: String,
+        reason: String,
+        amount: String,
+        currency: String,
+        payee: Party,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        #[serde(rename = "originatingCountry")]
+        originating_country: String,
+        #[serde(rename = "originalAmount")]
+        original_amount: String,
+        #[serde(rename = "originalCurrency")]
+        original_currency: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "payerIdentificationType")]
+        payer_identification_type: String,
+        #[serde(rename = "payerIdentificationNumber")]
+        payer_identification_number: String,
+        #[serde(rename = "payerIdentity")]
+        payer_identity: String,
+        #[serde(rename = "payerFirstName")]
+        payer_first_name: String,
+        #[serde(rename = "payerSurname")]
+        payer_surname: String,
+        #[serde(rename = "payerLanguageCode")]
+        payer_language_code: String,
+        #[serde(rename = "payerEmail")]
+        payer_email: String,
+        #[serde(rename = "payerMsisdn")]
+        payer_msisdn: String,
+        #[serde(rename = "payerGender")]
+        payer_gender: String,
+    },
+
+    CashTransferFailed {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        status: String,
+        reason: String,
+        amount: String,
+        currency: String,
+        payee: Party,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        #[serde(rename = "originatingCountry")]
+        originating_country: String,
+        #[serde(rename = "originalAmount")]
+        original_amount: String,
+        #[serde(rename = "originalCurrency")]
+        original_currency: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "payerIdentificationType")]
+        payer_identification_type: String,
+        #[serde(rename = "payerIdentificationNumber")]
+        payer_identification_number: String,
+        #[serde(rename = "payerIdentity")]
+        payer_identity: String,
+        #[serde(rename = "payerFirstName")]
+        payer_first_name: String,
+        #[serde(rename = "payerSurname")]
+        payer_surname: String,
+        #[serde(rename = "payerLanguageCode")]
+        payer_language_code: String,
+        #[serde(rename = "payerEmail")]
+        payer_email: String,
+        #[serde(rename = "payerMsisdn")]
+        payer_msisdn: String,
+        #[serde(rename = "payerGender")]
+        payer_gender: String,
+
+        #[serde(rename = "errorReason")]
+        error_reason: Reason,
     },
 }
 
