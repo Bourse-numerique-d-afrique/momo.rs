@@ -179,10 +179,11 @@ impl Disbursements {
     pub async fn deposit_v1(
         &self,
         transfer: TransferRequest,
+        callback_url: Option<&str>,
     ) -> Result<DepositId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
-        let res = client
+        let mut req = client
             .post(format!("{}/disbursement/v1_0/deposit", self.url))
             .bearer_auth(access_token.access_token)
             .header("Content-Type", "application/json")
@@ -190,9 +191,15 @@ impl Disbursements {
             .header("X-Reference-Id", &transfer.external_id)
             .header("Cache-Control", "no-cache")
             .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-            .body(transfer.clone())
-            .send()
-            .await?;
+            .body(transfer.clone());
+
+        if let Some(callback_url) = callback_url {
+            if !callback_url.is_empty() {
+                req = req.header("X-Callback-Url", callback_url);
+            }
+        }
+
+        let res = req.send().await?;
 
         if res.status().is_success() {
             Ok(DepositId(transfer.external_id))
@@ -217,10 +224,11 @@ impl Disbursements {
     pub async fn deposit_v2(
         &self,
         transfer: TransferRequest,
+        callback_url: Option<&str>,
     ) -> Result<DepositId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
-        let res = client
+        let mut req = client
             .post(format!("{}/disbursement/v2_0/deposit", self.url))
             .bearer_auth(access_token.access_token)
             .header("Content-Type", "application/json")
@@ -228,9 +236,15 @@ impl Disbursements {
             .header("X-Reference-Id", &transfer.external_id)
             .header("Cache-Control", "no-cache")
             .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-            .body(transfer.clone())
-            .send()
-            .await?;
+            .body(transfer.clone());
+
+        if let Some(callback_url) = callback_url {
+            if !callback_url.is_empty() {
+                req = req.header("X-Callback-Url", callback_url);
+            }
+        }
+
+        let res = req.send().await?;
 
         if res.status().is_success() {
             Ok(DepositId(transfer.external_id))
@@ -467,19 +481,26 @@ impl Disbursements {
     pub async fn transfer(
         &self,
         transfer: TransferRequest,
+        callback_url: Option<&str>,
     ) -> Result<TranserId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let access_token = self.get_valid_access_token().await?;
-        let res = client
+        let mut req = client
             .post(format!("{}/disbursement/v1_0/transfer", self.url))
             .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
             .header("X-Reference-Id", &transfer.external_id)
             .header("Cache-Control", "no-cache")
             .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-            .body(transfer.clone())
-            .send()
-            .await?;
+            .body(transfer.clone());
+
+        if let Some(callback_url) = callback_url {
+            if !callback_url.is_empty() {
+                req = req.header("X-Callback-Url", callback_url);
+            }
+        }
+
+        let res = req.send().await?;
 
         if res.status().is_success() {
             Ok(TranserId(transfer.external_id))
@@ -846,7 +867,7 @@ mod tests {
             "payer_message".to_string(),
             "payee_note".to_string(),
         );
-        let result = disbursements.deposit_v1(transfer.clone()).await;
+        let result = disbursements.deposit_v1(transfer.clone(), None).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().as_string(), transfer.external_id);
     }
@@ -882,7 +903,7 @@ mod tests {
             "payer_message".to_string(),
             "payee_note".to_string(),
         );
-        let result = disbursements.deposit_v1(transfer.clone()).await;
+        let result = disbursements.deposit_v1(transfer.clone(), None).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().as_string(), transfer.external_id);
     }
@@ -918,7 +939,7 @@ mod tests {
             "payer_message".to_string(),
             "payee_note".to_string(),
         );
-        let result = disbursements.deposit_v1(transfer.clone()).await;
+        let result = disbursements.deposit_v1(transfer.clone(), None).await;
         assert!(result.is_ok());
         let status_result = disbursements
             .get_deposit_status(result.unwrap().as_string())
@@ -1139,7 +1160,7 @@ mod tests {
             "payer_message".to_string(),
             "payee_note".to_string(),
         );
-        let transfer_result = disbursements.transfer(transfer.clone()).await;
+        let transfer_result = disbursements.transfer(transfer.clone(), None).await;
         assert!(transfer_result.is_ok());
         assert_eq!(transfer_result.unwrap().as_string(), transfer.external_id);
     }
@@ -1174,7 +1195,7 @@ mod tests {
             "payer_message".to_string(),
             "payee_note".to_string(),
         );
-        let transfer_result = disbursements.transfer(transfer.clone()).await;
+        let transfer_result = disbursements.transfer(transfer.clone(), None).await;
         assert!(transfer_result.is_ok());
 
         let status_result = disbursements

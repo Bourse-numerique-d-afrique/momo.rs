@@ -76,7 +76,7 @@ use enums::{reason::RequestToPayReason, request_to_pay_status::RequestToPayStatu
 use poem::{
     error::ReadBodyError, listener::TcpListener, middleware::AddData, post, web::Data, EndpointExt,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use poem::Result;
@@ -230,7 +230,7 @@ impl DepositId {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum CallbackResponse {
     RequestToPaySuccess {
         #[serde(rename = "financialTransactionId")]
