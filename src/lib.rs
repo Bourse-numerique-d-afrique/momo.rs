@@ -72,10 +72,7 @@ use futures_core::Stream;
 use std::error::Error;
 use tokio::sync::mpsc::{self, Sender};
 
-use enums::{
-    deposit_status::DepositStatus, reason::RequestToPayReason,
-    request_to_pay_status::RequestToPayStatus,
-};
+use enums::{reason::RequestToPayReason, request_to_pay_status::RequestToPayStatus};
 use poem::{
     error::ReadBodyError, listener::TcpListener, middleware::AddData, post, web::Data, EndpointExt,
 };

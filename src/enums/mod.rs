@@ -1,6 +1,5 @@
 pub mod access_type;
 pub mod currency;
-pub mod deposit_status;
 pub mod environment;
 pub mod party_id_type;
 pub mod payer_identification_type;
