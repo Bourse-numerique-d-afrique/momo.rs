@@ -506,6 +506,7 @@ async fn mtn_put_calback(
         .body("Callback received successfully"))
 }
 
+#[derive(Copy, Clone)]
 pub struct MomoCallbackListener;
 
 impl MomoCallbackListener {
