@@ -74,7 +74,12 @@ use tokio::sync::mpsc::{self, Sender};
 
 use enums::{reason::RequestToPayReason, request_to_pay_status::RequestToPayStatus};
 use poem::{
-    error::ReadBodyError, listener::TcpListener, middleware::AddData, post, web::Data, EndpointExt,
+    error::ReadBodyError,
+    listener::TcpListener,
+    middleware::AddData,
+    post,
+    web::{Data, Path},
+    EndpointExt,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -161,6 +166,9 @@ impl TranserId {
 pub struct TransactionId(String);
 
 impl TransactionId {
+    pub fn new(id: String) -> Self {
+        TransactionId(format!("collection_{}", id))
+    }
     pub fn as_string(&self) -> String {
         self.0.clone()
     }
@@ -230,6 +238,10 @@ impl DepositId {
     }
 }
 
+/// MTN momo error Reason
+///
+/// - 'code', Reason error code
+/// - 'message', Reason message
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Reason {
     pub code: RequestToPayReason,
@@ -238,6 +250,7 @@ pub struct Reason {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum CallbackResponse {
+    // Request to pay success callback response
     RequestToPaySuccess {
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: String,
@@ -252,6 +265,8 @@ pub enum CallbackResponse {
         payer_message: String,
         status: RequestToPayStatus,
     },
+
+    // Request to pay failed callback response
     RequestToPayFailed {
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: String,
@@ -268,6 +283,7 @@ pub enum CallbackResponse {
         reason: Reason,
     },
 
+    // pre approval success callback response
     PreApprovalSuccess {
         payer: Party,
         #[serde(rename = "payerCurrency")]
@@ -277,6 +293,7 @@ pub enum CallbackResponse {
         expiration_date_time: String,
     },
 
+    // pre approval failed callback response
     PreApprovalFailed {
         payer: Party,
         #[serde(rename = "payerCurrency")]
@@ -287,6 +304,7 @@ pub enum CallbackResponse {
         reason: Reason,
     },
 
+    // payment succeded callback response
     PaymentSucceeded {
         #[serde(rename = "referenceId")]
         reference_id: String,
@@ -295,6 +313,7 @@ pub enum CallbackResponse {
         financial_transaction_id: String,
     },
 
+    // paymen failed callback response
     PaymentFailed {
         #[serde(rename = "referenceId")]
         reference_id: String,
@@ -304,6 +323,7 @@ pub enum CallbackResponse {
         reason: Reason,
     },
 
+    // invoice succeeded callback response
     InvoiceSucceeded {
         #[serde(rename = "referenceId")]
         reference_id: String,
@@ -323,6 +343,7 @@ pub enum CallbackResponse {
         description: String,
     },
 
+    // invoice failed callback response
     InvoiceFailed {
         #[serde(rename = "referenceId")]
         reference_id: String,
@@ -344,6 +365,7 @@ pub enum CallbackResponse {
         erron_reason: Reason,
     },
 
+    // cash transfer succeeded callback response
     CashTransferSucceeded {
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: String,
@@ -384,6 +406,7 @@ pub enum CallbackResponse {
         payer_gender: String,
     },
 
+    // cash trasnfer failed callaback response
     CashTransferFailed {
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: String,
@@ -431,6 +454,7 @@ pub enum CallbackResponse {
 pub struct MomoUpdates {
     pub remote_address: String,
     pub response: CallbackResponse,
+    pub update_type: String,
 }
 
 #[handler]
@@ -438,6 +462,7 @@ async fn mtn_callback(
     req: &poem::Request,
     mut body: poem::Body,
     sender: Data<&Sender<MomoUpdates>>,
+    Path(callback_type): Path<String>,
 ) -> Result<poem::Response, poem::Error> {
     let remote_address = req.remote_addr().clone();
     let string = body.into_string().await?;
@@ -447,6 +472,7 @@ async fn mtn_callback(
     let momo_updates = MomoUpdates {
         remote_address: remote_address.to_string(),
         response: response_result.unwrap(),
+        update_type: callback_type,
     };
     let listener_update = sender.send(momo_updates).await;
     if listener_update.is_err() {}
@@ -460,6 +486,7 @@ async fn mtn_put_calback(
     req: &poem::Request,
     mut body: poem::Body,
     sender: Data<&Sender<MomoUpdates>>,
+    Path(callback_type): Path<String>,
 ) -> Result<poem::Response, poem::Error> {
     let remote_address = req.remote_addr().clone();
     let string = body.into_string().await?;
@@ -469,6 +496,7 @@ async fn mtn_put_calback(
     let momo_updates = MomoUpdates {
         remote_address: remote_address.to_string(),
         response: response_result.unwrap(),
+        update_type: callback_type,
     };
     let listener_update = sender.send(momo_updates).await;
     if listener_update.is_err() {}
@@ -492,7 +520,58 @@ impl MomoCallbackListener {
         std::env::set_var("RUST_BACKTRACE", "1");
 
         let app = Route::new()
-            .at("/mtn", post(mtn_callback).put(mtn_put_calback))
+            .at(
+                "/collection_request_to_pay/:callback_type",
+                post(mtn_callback).put(mtn_callback),
+            )
+            .at(
+                "/collection_request_to_withdraw_v1/:callback_type",
+                post(mtn_callback).put(mtn_callback),
+            )
+            .at(
+                "/collection_request_to_withdraw_v2/:callback_type",
+                post(mtn_callback).put(mtn_callback),
+            )
+            .at(
+                "/collection_invoice/:callback_type",
+                post(mtn_callback).put(mtn_callback),
+            )
+            .at(
+                "/collection_payment/:callback_type",
+                post(mtn_callback).put(mtn_callback),
+            )
+            .at(
+                "/collection_preapproval:callback_type",
+                post(mtn_callback).put(mtn_callback),
+            )
+            .at(
+                "/disbursement_deposit_V1/:callback_type",
+                post(mtn_callback).put(mtn_callback),
+            )
+            .at(
+                "/disbursement_deposit_v2/:callback_type",
+                post(mtn_callback).put(mtn_callback),
+            )
+            .at(
+                "/disburseemnt_refund_v1/:callback_type",
+                post(mtn_callback).put(mtn_callback),
+            )
+            .at(
+                "/disburseemnt_refund_v2/:callback_type",
+                post(mtn_callback).put(mtn_callback),
+            )
+            .at(
+                "/disburseemnt_transfer/:callback_type",
+                post(mtn_callback).put(mtn_callback),
+            )
+            .at(
+                "remittance_cash_transfer/:callback_type",
+                post(mtn_callback).put(mtn_callback),
+            )
+            .at(
+                "remittance_transfer/:callback_type",
+                post(mtn_callback).put(mtn_callback),
+            )
             .with(poem::middleware::Tracing::default())
             .with(poem::middleware::Cors::new())
             .with(poem::middleware::Compression::default())
