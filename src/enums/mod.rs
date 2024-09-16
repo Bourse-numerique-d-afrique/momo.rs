@@ -1,4 +1,5 @@
 pub mod access_type;
+pub mod callback_type;
 pub mod currency;
 pub mod environment;
 pub mod party_id_type;

@@ -99,6 +99,7 @@ pub type PartyIdType = enums::party_id_type::PartyIdType;
 pub type Currency = enums::currency::Currency;
 pub type Environment = enums::environment::Environment;
 pub type AccessType = enums::access_type::AccessType;
+pub type CallbackType = enums::callback_type::CallbackType;
 
 pub type Party = structs::party::Party;
 pub type Balance = structs::balance::Balance;
@@ -454,7 +455,7 @@ pub enum CallbackResponse {
 pub struct MomoUpdates {
     pub remote_address: String,
     pub response: CallbackResponse,
-    pub update_type: String,
+    pub update_type: CallbackType,
 }
 
 #[handler]
@@ -472,7 +473,7 @@ async fn mtn_callback(
     let momo_updates = MomoUpdates {
         remote_address: remote_address.to_string(),
         response: response_result.unwrap(),
-        update_type: callback_type,
+        update_type: CallbackType::from_string(&callback_type),
     };
     let listener_update = sender.send(momo_updates).await;
     if listener_update.is_err() {}
@@ -496,7 +497,7 @@ async fn mtn_put_calback(
     let momo_updates = MomoUpdates {
         remote_address: remote_address.to_string(),
         response: response_result.unwrap(),
-        update_type: callback_type,
+        update_type: CallbackType::from_string(&callback_type),
     };
     let listener_update = sender.send(momo_updates).await;
     if listener_update.is_err() {}
