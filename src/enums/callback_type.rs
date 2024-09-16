@@ -6,19 +6,46 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub enum CallbackType {
+    #[serde(rename = "REQUEST_TO_PAY")]
     RequestToPay,
+
+    #[serde(rename = "REQUEST_TO_WITHDRAW_V1")]
     RequestToWithdrawV1,
+
+    #[serde(rename = "REQUEST_TO_WITHDRAW_V2")]
     RequestToWithdrawV2,
+
+    #[serde(rename = "INVOICE")]
     Invoice,
+
+    #[serde(rename = "COLLECTION_PAYMENT")]
     CollectionPayment,
+
+    #[serde(rename = "COLLECTION_PRE_APPROVAL")]
     CollectionPreApproval,
+
+    #[serde(rename = "DISBURSEMENT_DEPOSIT_V1")]
     DisbursementDepositV1,
+
+    #[serde(rename = "DISBURSEMENT_DEPOSIT_V2")]
     DisbursementDepositV2,
+
+    #[serde(rename = "DISBURSEMENT_REFUND_V1")]
     DisbursementRefundV1,
+
+    #[serde(rename = "DISBURSEMENT_REFUND_V2")]
     DisbursementRefundV2,
+
+    #[serde(rename = "DISBURSEMENT_TRANSFER")]
     DisbusrementTransfer,
+
+    #[serde(rename = "REMITTANCE_CASH_TRANSFER")]
     RemittanceCashTransfer,
+
+    #[serde(rename = "REMITTANCE_TRANSFER")]
     RemittanceTransfer,
+
+    #[serde(rename = "None")]
     None,
 }
 
