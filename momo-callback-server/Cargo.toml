@@ -1,0 +1,52 @@
+[package]
+name = "momo-callback-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["ONDONDA Prince Merveil @princefr"]
+description = "Standalone TLS-enabled callback server for MTN MoMo payment callbacks"
+license = "MIT"
+repository = "https://github.com/Bourse-numerique-d-afrique/momo.rs"
+documentation = "https://docs.rs/momo-callback-server"
+readme = "README.md"
+keywords = ["momo", "callback", "server", "tls", "payments"]
+categories = ["web-programming::http-server", "network-programming", "api-bindings"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+# Core async runtime
+tokio = { version = "1.33.0", features = ["full"] }
+
+# Web framework with TLS support
+poem = { version = "3.0.4", features = [
+    "rustls",
+    "compression",
+    "sse",
+    "requestid",
+] }
+
+# JSON serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.108"
+
+# Logging and tracing
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
+
+# Async utilities
+futures-core = "0.3.30"
+futures-util = "0.3.30"
+async-stream = "0.3.5"
+
+# TLS support
+rustls = "0.23.12"
+rustls-pemfile = "2.0.0"
+tokio-rustls = "0.26.0"
+
+# MTN MoMo library
+mtnmomo = { path = ".." }
+
+# Error handling
+thiserror = "1.0.63"

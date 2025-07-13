@@ -18,7 +18,7 @@ pub struct UserInfoWithConsent {
     pub address: String,
     pub updated_at: i32,
     pub status: String,
-    pub birthdate: String,
+    pub birthdate: Option<String>,
     pub credit_score: String,
     pub active: bool,
     pub country_of_birth: String,

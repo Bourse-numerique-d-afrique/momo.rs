@@ -8,7 +8,7 @@ use serde::{Serialize, Deserialize};
 pub struct BasicUserInfoJsonResponse {
     pub given_name: String,
     pub family_name: String,
-    pub birthdate: String,
-    pub locale: String,
-    pub gender: String,
+    pub birthdate: Option<String>,
+    pub locale: Option<String>,
+    pub gender: Option<String>,
 }

@@ -18,7 +18,8 @@
 //!   let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set"); // https://sandbox.momodeveloper.mtn.com
 //!   let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
 //!   let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
-//!   let momo = Momo::new_with_provisioning(mtn_url, primary_key.clone()).await.unwrap();
+//!   let callback_host = env::var("MTN_CALLBACK_HOST").expect("MTN_CALLBACK_HOST must be set");
+//!   let momo = Momo::new_with_provisioning(mtn_url, primary_key.clone(), &callback_host).await.unwrap();
 //!   let collection = momo.collection(primary_key, secondary_key);
 //! }
 //!
@@ -50,7 +51,8 @@
 //!   let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set"); // https://sandbox.momodeveloper.mtn.com
 //!   let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
 //!   let secondary_key = env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
-//!   let momo = Momo::new_with_provisioning(mtn_url, primary_key.clone()).await.unwrap();
+//!   let callback_host = env::var("MTN_CALLBACK_HOST").expect("MTN_CALLBACK_HOST must be set");
+//!   let momo = Momo::new_with_provisioning(mtn_url, primary_key.clone(), &callback_host).await.unwrap();
 //!   let collection = momo.collection(primary_key, secondary_key);
 //!
 //!    let payer : Party = Party {
@@ -59,7 +61,7 @@
 //!      };
 //!
 //!   let request = RequestToPay::new("100".to_string(), Currency::EUR, payer, "test_payer_message".to_string(), "test_payee_note".to_string());
-//!   let result = collection.request_to_pay(request).await;
+//!   let result = collection.request_to_pay(request, None).await;
 //! }
 //! ```
 //! The above code will request a payment of 100 EUR from the customer with the phone number "234553".
@@ -543,7 +545,7 @@ impl MomoCallbackListener {
                 post(mtn_callback).put(mtn_callback),
             )
             .at(
-                "/collection_preapproval:callback_type",
+                "/collection_preapproval/:callback_type",
                 post(mtn_callback).put(mtn_callback),
             )
             .at(
@@ -593,6 +595,7 @@ impl MomoCallbackListener {
             }
         })
     }
+
 }
 
 #[doc(hidden)]
