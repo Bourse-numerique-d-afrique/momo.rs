@@ -284,7 +284,7 @@ impl Remittance {
             .await?;
 
         if res.status().is_success() {
-            Ok(TranserId(transfer.external_id))
+            Ok(TranserId::new(transfer.external_id))
         } else {
             Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,

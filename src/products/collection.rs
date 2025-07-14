@@ -9,17 +9,13 @@
 //!
 //!
 
-use std::sync::Arc;
-
 use crate::{
     BCAuthorizeResponse, Balance, BasicUserInfoJsonResponse, CreatePaymentRequest, Currency,
     DeliveryNotificationRequest, Environment, InvoiceDeleteRequest, InvoiceId, InvoiceRequest,
     InvoiceResult, OAuth2TokenResponse, PaymentId, PaymentResult, PreApprovalRequest,
     PreApprovalResult, RequestToPay, RequestToPayResult, TokenResponse, TransactionId, WithdrawId,
+    common::{http_client::MomoHttpClient, token_manager::ProductType}
 };
-use chrono::Utc;
-use once_cell::sync::Lazy;
-use tokio::sync::RwLock;
 
 use super::{account::Account, auth::Authorization};
 
@@ -35,10 +31,8 @@ pub struct Collection {
     pub api_key: String,
     account: Account,
     auth: Authorization,
+    http_client: MomoHttpClient,
 }
-
-static ACCESS_TOKEN: Lazy<Arc<RwLock<Option<TokenResponse>>>> =
-    Lazy::new(|| Arc::new(RwLock::new(None)));
 
 impl Collection {
     /// Create a new instance of Collection
@@ -64,6 +58,14 @@ impl Collection {
     ) -> Collection {
         let account = Account {};
         let auth = Authorization {};
+        let http_client = MomoHttpClient::new(
+            url.clone(),
+            ProductType::Collection,
+            environment.clone(),
+            api_user.clone(),
+            api_key.clone(),
+            primary_key.clone(),
+        );
         Collection {
             url,
             primary_key,
@@ -73,30 +75,10 @@ impl Collection {
             api_key,
             account,
             auth,
+            http_client,
         }
     }
 
-    /// This operation is used to create an access token
-    ///
-    /// # Returns
-    ///
-    /// * 'TokenResponse'
-    async fn create_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
-        let url = format!("{}/{}", self.url, "collection");
-        let token = self
-            .auth
-            .create_access_token(
-                url,
-                self.api_user.clone(),
-                self.api_key.clone(),
-                self.primary_key.clone(),
-            )
-            .await?;
-
-        let mut token_ = ACCESS_TOKEN.write().await;
-        *token_ = Some(token.clone());
-        Ok(token)
-    }
 
     /// This operation is used to create an OAuth2 token
     ///
@@ -112,7 +94,7 @@ impl Collection {
         &self,
         auth_req_id: String,
     ) -> Result<OAuth2TokenResponse, Box<dyn std::error::Error>> {
-        let url = format!("{}/{}", self.url, "collection");
+        let url = format!("{}/collection", self.url);
         self.auth
             .create_o_auth_2_token(
                 url,
@@ -141,8 +123,13 @@ impl Collection {
         msisdn: String,
         callback_url: Option<&str>,
     ) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
-        let url = format!("{}/{}", self.url, "collection");
-        let access_token: TokenResponse = self.create_access_token().await?;
+        let url = format!("{}/collection", self.url);
+        let access_token: TokenResponse = self.auth.create_access_token(
+            url.clone(),
+            self.api_user.clone(),
+            self.api_key.clone(),
+            self.primary_key.clone(),
+        ).await?;
         self.auth
             .bc_authorize(
                 url,
@@ -155,31 +142,6 @@ impl Collection {
             .await
     }
 
-    /// This operation is used to get the latest access token from the database
-    ///
-    /// # Returns
-    /// * 'TokenResponse'
-    async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
-        let token = ACCESS_TOKEN.read().await;
-        if token.is_some() {
-            let token = token.clone().unwrap();
-            if token.created_at.is_some() {
-                let created_at = token.created_at.unwrap();
-                let expires_in = token.expires_in;
-                let now = Utc::now();
-                let duration = now.signed_duration_since(created_at);
-                if duration.num_seconds() < expires_in as i64 {
-                    return Ok(token);
-                }
-                drop(token);
-                let token: TokenResponse = self.create_access_token().await?;
-                return Ok(token);
-            }
-        }
-        drop(token);
-        let token: TokenResponse = self.create_access_token().await?;
-        return Ok(token);
-    }
 
     /// This operation is used to cancel an invoice.
     ///
@@ -196,7 +158,7 @@ impl Collection {
         callback_url: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let mut req = client
             .delete(format!(
                 "{}/collection/v2_0/invoice/{}",
@@ -245,7 +207,7 @@ impl Collection {
         callback_url: Option<&str>,
     ) -> Result<InvoiceId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let mut req = client
             .post(format!("{}/collection/v2_0/invoice", self.url))
             .bearer_auth(access_token.access_token)
@@ -264,7 +226,7 @@ impl Collection {
         let res = req.send().await?;
 
         if res.status().is_success() {
-            Ok(InvoiceId(invoice.external_id))
+            Ok(InvoiceId::new(invoice.external_id))
         } else {
             let res_clone = res.text().await?;
             Err(Box::new(std::io::Error::new(
@@ -289,7 +251,7 @@ impl Collection {
         callback_url: Option<&str>,
     ) -> Result<PaymentId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let mut req = client
             .post(format!("{}/collection/v2_0/payment", self.url))
             .bearer_auth(access_token.access_token)
@@ -308,7 +270,7 @@ impl Collection {
         let res = req.send().await?;
 
         if res.status().is_success() {
-            Ok(PaymentId(payment.external_transaction_id))
+            Ok(PaymentId::new(payment.external_transaction_id))
         } else {
             Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
@@ -332,7 +294,7 @@ impl Collection {
         invoice_id: String,
     ) -> Result<InvoiceResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let res = client
             .get(format!(
                 "{}/collection/v2_0/invoice/{}",
@@ -372,7 +334,7 @@ impl Collection {
         payment_id: String,
     ) -> Result<PaymentResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let res = client
             .get(format!(
                 "{}/collection/v2_0/payment/{}",
@@ -412,7 +374,7 @@ impl Collection {
         pre_approval_id: String,
     ) -> Result<PreApprovalResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let res = client
             .get(format!(
                 "{}/collection/v2_0/preapproval/{}",
@@ -448,7 +410,7 @@ impl Collection {
     ) -> Result<String, Box<dyn std::error::Error>> {
         let external_id = uuid::Uuid::new_v4().to_string();
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let res = client
             .post(format!("{}/collection/v2_0/preapproval", self.url))
             .bearer_auth(access_token.access_token)
@@ -491,16 +453,15 @@ impl Collection {
         callback_url: Option<&str>,
     ) -> Result<TransactionId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let mut req = client
             .post(format!("{}/collection/v1_0/requesttopay", self.url))
             .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
-            .header("Cache-Control", "no-cache")
-            .header("Content-Type", "application/json")
             .header("X-Reference-Id", &request.external_id)
             .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-            .body(request.clone());
+            .header("Content-Type", "application/json")
+            .body(serde_json::to_string(&request)?);
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
@@ -511,11 +472,13 @@ impl Collection {
         let res = req.send().await?;
 
         if res.status().is_success() {
-            Ok(TransactionId(request.external_id))
+            Ok(TransactionId::new(request.external_id))
         } else {
+            let status_code = res.status().as_u16();
+            let error_text = res.text().await?;
             Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                res.text().await?,
+                format!("{{ \"statusCode\": {}, \"message\": \"{}\" }}", status_code, error_text),
             )))
         }
     }
@@ -536,7 +499,7 @@ impl Collection {
         notification: DeliveryNotificationRequest,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let res = client
             .post(format!(
                 "{}/collection/v1_0/requesttopay/{}/deliverynotification",
@@ -576,7 +539,7 @@ impl Collection {
         payment_id: &str,
     ) -> Result<RequestToPayResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let res = client
             .get(format!(
                 "{}/collection/v1_0/requesttopay/{}",
@@ -614,7 +577,7 @@ impl Collection {
         payment_id: &str,
     ) -> Result<RequestToPayResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let res = client
             .get(format!(
                 "{}/collection/v1_0/requesttowithdraw/{}",
@@ -653,7 +616,7 @@ impl Collection {
         callback_url: Option<&str>,
     ) -> Result<WithdrawId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let mut req = client
             .post(format!("{}/collection/v1_0/requesttowithdraw", self.url))
             .bearer_auth(access_token.access_token)
@@ -672,7 +635,7 @@ impl Collection {
         let res = req.send().await?;
 
         if res.status().is_success() {
-            Ok(WithdrawId(request.external_id))
+            Ok(WithdrawId::new(request.external_id))
         } else {
             Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
@@ -701,7 +664,7 @@ impl Collection {
         callback_url: Option<&str>,
     ) -> Result<WithdrawId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let mut req = client
             .post(format!("{}/collection/v2_0/requesttowithdraw", self.url))
             .bearer_auth(access_token.access_token)
@@ -720,7 +683,7 @@ impl Collection {
         let res = req.send().await?;
 
         if res.status().is_success() {
-            Ok(WithdrawId(request.external_id))
+            Ok(WithdrawId::new(request.external_id))
         } else {
             Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
@@ -735,7 +698,7 @@ impl Collection {
     /// * 'Balance', the balance
     pub async fn get_account_balance(&self) -> Result<Balance, Box<dyn std::error::Error>> {
         let url = format!("{}/collection", self.url);
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         self.account
             .get_account_balance(
                 url,
@@ -759,7 +722,7 @@ impl Collection {
         currency: Currency,
     ) -> Result<Balance, Box<dyn std::error::Error>> {
         let url = format!("{}/collection", self.url);
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         self.account
             .get_account_balance_in_specific_currency(
                 url,
@@ -784,7 +747,7 @@ impl Collection {
         account_holder_msisdn: &str,
     ) -> Result<BasicUserInfoJsonResponse, Box<dyn std::error::Error>> {
         let url = format!("{}/collection", self.url);
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         self.account
             .get_basic_user_info(
                 url,
@@ -837,7 +800,7 @@ impl Collection {
         account_holder_type: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let url = format!("{}/collection", self.url);
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         self.account
             .validate_account_holder_status(
                 url,
@@ -1014,11 +977,11 @@ mod tests {
             .await
             .expect("Error requesting payment");
 
-        assert_ne!(res.0.len(), 0);
+        assert_ne!(res.as_str().len(), 0);
 
         let notifcation_result = collection
             .request_to_pay_delivery_notification(
-                &res.0,
+                res.as_str(),
                 DeliveryNotificationRequest {
                     notification_message: "test_notification_message".to_string(),
                 },
@@ -1215,7 +1178,7 @@ mod tests {
             .expect("Error creating invoice");
 
         let res = collection
-            .get_invoice_status(invoice_id.0)
+            .get_invoice_status(invoice_id.as_string())
             .await
             .expect("Error getting invoice status");
         assert_eq!(res.status, "SUCCESSFUL".to_string());
@@ -1496,7 +1459,7 @@ mod tests {
             .await
             .expect("Error requesting to withdraw");
         let res = collection
-            .request_to_withdraw_transaction_status(&withdraw_id.0)
+            .request_to_withdraw_transaction_status(withdraw_id.as_str())
             .await
             .expect("Error getting request to withdraw status");
         assert_eq!(res.status, "SUCCESSFUL");
