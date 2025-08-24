@@ -2,13 +2,12 @@
 use reqwest::Body;
 
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DeliveryNotification {
     #[serde(rename = "notificationMessage")]
-    pub notification_message: String
+    pub notification_message: String,
 }
 
 impl From<DeliveryNotification> for Body {

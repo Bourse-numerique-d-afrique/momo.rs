@@ -4,7 +4,7 @@
 //! - Disbursements
 //! - Remittance
 //! - Provisioning in case of sandbox environment
-//! how to use:
+//!   how to use:
 //! # Examples
 //! ```
 //! use mtnmomo::Momo;
@@ -69,17 +69,20 @@
 //! If the customer confirms the payment, the payment will be processed and the customer will receive a confirmation message.
 //! If the customer declines the payment, the payment will not be processed and the customer will receive a message informing them that the payment was declined.
 
-use uuid::Uuid;
 use std::error::Error;
+use uuid::Uuid;
 
+pub mod callback;
+pub mod common;
 pub mod enums;
 pub mod errors;
 pub mod products;
 pub mod requests;
 pub mod responses;
 pub mod structs;
-pub mod common;
-pub mod callback;
+
+#[cfg(feature = "callback-server")]
+pub mod callback_server;
 
 pub type PartyIdType = enums::party_id_type::PartyIdType;
 pub type Currency = enums::currency::Currency;
@@ -124,13 +127,16 @@ pub type CashTransferResult = responses::cash_transfer_result::CashTransferResul
 pub type TransferResult = responses::transfer_result::TransferResult;
 
 // Re-export callback types
-pub use callback::{CallbackResponse, MomoUpdates, MomoCallbackListener, Reason};
+pub use callback::{CallbackResponse, MomoCallbackListener, MomoUpdates, Reason};
+
+// Re-export callback server types when feature is enabled
+#[cfg(feature = "callback-server")]
+pub use callback_server::{start_callback_server, CallbackServerConfig};
 
 // Re-export ID types from common module
 pub use common::id::{
-    TransactionId, RefundId, InvoiceId, PaymentId, WithdrawId, DepositId, TranserId
+    DepositId, InvoiceId, PaymentId, RefundId, TransactionId, TranserId, WithdrawId,
 };
-
 
 #[doc(hidden)]
 #[derive(Debug)]
@@ -179,16 +185,16 @@ impl Momo {
     ) -> Result<Momo, Box<dyn Error>> {
         let provisioning = MomoProvisioning::new(url.clone(), subscription_key.clone());
         let reference_id = Uuid::new_v4().to_string();
-        let _create_sandbox = provisioning
+        provisioning
             .create_sandox(&reference_id, provider_callback_host)
             .await?;
         let api = provisioning.create_api_information(&reference_id).await?;
-        return Ok(Momo {
+        Ok(Momo {
             url,
             environment: Environment::Sandbox,
             api_user: reference_id,
             api_key: api.api_key,
-        });
+        })
     }
 
     /// create a new instance of Collection product
@@ -203,7 +209,7 @@ impl Momo {
     pub fn collection(&self, primary_key: String, secondary_key: String) -> MomoCollection {
         MomoCollection::new(
             self.url.clone(),
-            self.environment.clone(),
+            self.environment,
             self.api_user.clone(),
             self.api_key.clone(),
             primary_key,
@@ -224,7 +230,7 @@ impl Momo {
     pub fn disbursement(&self, primary_key: String, secondary_key: String) -> MomoDisbursements {
         MomoDisbursements::new(
             self.url.clone(),
-            self.environment.clone(),
+            self.environment,
             self.api_user.clone(),
             self.api_key.clone(),
             primary_key,
@@ -246,7 +252,7 @@ impl Momo {
     pub fn remittance(&self, primary_key: String, secondary_key: String) -> MomoRemittance {
         MomoRemittance::new(
             self.url.clone(),
-            self.environment.clone(),
+            self.environment,
             self.api_user.clone(),
             self.api_key.clone(),
             primary_key,

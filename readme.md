@@ -102,4 +102,133 @@ When using the sandbox environment, you should use MTN's predefined test phone n
 
 ### Callback Server
 
-This library also includes a callback server for handling MTN MoMo webhooks. See the `momo-callback-server` directory for more details.
+This library includes an integrated callback server for handling MTN MoMo webhooks. The callback server provides a secure HTTPS endpoint that processes payment notifications from MTN MoMo API.
+
+#### Installation with Callback Server
+
+```toml
+[dependencies]
+mtnmomo = { version = "0.1.4", features = ["callback-server"] }
+```
+
+#### Basic Callback Server Usage
+
+```rust
+use mtnmomo::{CallbackServerConfig, start_callback_server};
+use futures_util::StreamExt;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Configure the callback server
+    let config = CallbackServerConfig {
+        cert_path: "cert.pem".to_string(),
+        key_path: "key.pem".to_string(),
+        port: 443,
+        host: "0.0.0.0".to_string(),
+    };
+
+    // Start the callback server
+    let mut callback_stream = start_callback_server(config).await?;
+
+    println!("Callback server started on https://0.0.0.0:443");
+    println!("Health check available at: https://your-domain.com/health");
+
+    // Process incoming callbacks
+    while let Some(callback) = callback_stream.next().await {
+        println!("Received callback from: {}", callback.remote_address);
+        println!("Callback type: {:?}", callback.update_type);
+        println!("Response: {:?}", callback.response);
+
+        // Add your business logic here to handle different callback types
+        match callback.update_type {
+            mtnmomo::CallbackType::RequestToPay => {
+                println!("Processing payment callback");
+                // Handle payment completion/failure
+            }
+            mtnmomo::CallbackType::Invoice => {
+                println!("Processing invoice callback");
+                // Handle invoice events
+            }
+            mtnmomo::CallbackType::DisbursementDepositV1 | 
+            mtnmomo::CallbackType::DisbursementDepositV2 => {
+                println!("Processing disbursement callback");
+                // Handle disbursement completion
+            }
+            _ => {
+                println!("Processing other callback type");
+            }
+        }
+    }
+
+    Ok(())
+}
+```
+
+#### Environment Configuration
+
+The callback server can be configured using environment variables:
+
+```bash
+export TLS_CERT_PATH="/path/to/your/cert.pem"
+export TLS_KEY_PATH="/path/to/your/key.pem"
+```
+
+#### TLS Certificate Setup
+
+For production use, you'll need valid TLS certificates. You can obtain free certificates from Let's Encrypt:
+
+```bash
+# Install certbot
+sudo apt-get install certbot
+
+# Get certificate for your domain
+sudo certbot certonly --standalone -d your-domain.com
+
+# Copy certificates to your application directory
+sudo cp /etc/letsencrypt/live/your-domain.com/fullchain.pem cert.pem
+sudo cp /etc/letsencrypt/live/your-domain.com/privkey.pem key.pem
+```
+
+For development/testing, you can create self-signed certificates:
+
+```bash
+# Generate private key
+openssl genrsa -out key.pem 2048
+
+# Generate self-signed certificate
+openssl req -new -x509 -key key.pem -out cert.pem -days 365
+```
+
+#### Callback URLs
+
+When making API calls, use your callback server URLs:
+
+```rust
+// For payments
+let callback_url = "https://your-domain.com/collection_request_to_pay/REQUEST_TO_PAY";
+let result = collection.request_to_pay(request, Some(&callback_url)).await;
+
+// For disbursements  
+let callback_url = "https://your-domain.com/disbursement_deposit_v1/DISBURSEMENT_DEPOSIT_V1";
+let result = disbursement.deposit(request, Some(&callback_url)).await;
+```
+
+#### Available Endpoints
+
+The callback server automatically creates endpoints for all MTN MoMo services:
+
+- **Collection**: `/collection_request_to_pay/{callback_type}`
+- **Collection Withdrawals**: `/collection_request_to_withdraw_v1/{callback_type}`, `/collection_request_to_withdraw_v2/{callback_type}`
+- **Invoices**: `/collection_invoice/{callback_type}`, `/collection_payment/{callback_type}`
+- **Disbursements**: `/disbursement_deposit_v1/{callback_type}`, `/disbursement_deposit_v2/{callback_type}`
+- **Remittances**: `/remittance_cash_transfer/{callback_type}`, `/remittance_transfer/{callback_type}`
+- **Health Check**: `/health` (GET)
+
+#### Features
+
+- **🔒 TLS/HTTPS Support**: Secure server with certificate-based encryption
+- **📡 Complete Callback Coverage**: Handles all MTN MoMo callback types
+- **💊 Health Monitoring**: Built-in health check endpoint for load balancers
+- **🛡️ Production Ready**: Graceful shutdown, structured logging, comprehensive error handling
+- **⚙️ Environment Configuration**: Configurable via environment variables
+- **🔧 Extensible**: Easy-to-extend callback handlers for custom business logic

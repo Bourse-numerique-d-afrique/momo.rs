@@ -11,6 +11,15 @@ readme = "README.md"
 keywords = ["momo", "callback", "server", "tls", "payments"]
 categories = ["web-programming::http-server", "network-programming", "api-bindings"]
 
+# Support both library and binary usage
+[lib]
+name = "momo_callback_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "momo-callback-server"
+path = "src/main.rs"
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]

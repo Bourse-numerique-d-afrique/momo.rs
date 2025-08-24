@@ -2,9 +2,12 @@
 use reqwest::Body;
 
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use crate::{structs::party::Party, enums::{currency::Currency, payer_identification_type::PayerIdentificationType}};
+use crate::{
+    enums::{currency::Currency, payer_identification_type::PayerIdentificationType},
+    structs::party::Party,
+};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CashTransferRequest {
@@ -43,20 +46,50 @@ pub struct CashTransferRequest {
     pub payer_gender: String,
 }
 
-
 impl CashTransferRequest {
-    pub fn new(amount: String, currency: Currency, payee: Party, originating_country: String, original_amount: String,
-         original_currency: Currency, payer_message: String, payee_note: String, payer_identification_type: PayerIdentificationType, payer_identification_number: String, 
-         payer_identity: String, payer_first_name: String, payer_surname: String, payer_language_code: String, payer_email: String, payer_msisdn: String, payer_gender: String) -> Self{
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        amount: String,
+        currency: Currency,
+        payee: Party,
+        originating_country: String,
+        original_amount: String,
+        original_currency: Currency,
+        payer_message: String,
+        payee_note: String,
+        payer_identification_type: PayerIdentificationType,
+        payer_identification_number: String,
+        payer_identity: String,
+        payer_first_name: String,
+        payer_surname: String,
+        payer_language_code: String,
+        payer_email: String,
+        payer_msisdn: String,
+        payer_gender: String,
+    ) -> Self {
         let external_id = uuid::Uuid::new_v4().to_string();
-        Self { amount, currency, payee, external_id, originating_country, original_amount, original_currency, payer_message, payee_note, payer_identification_type, payer_identification_number, payer_identity, 
-            payer_first_name, payer_surname, payer_language_code, payer_email, payer_msisdn, payer_gender }
-
+        Self {
+            amount,
+            currency,
+            payee,
+            external_id,
+            originating_country,
+            original_amount,
+            original_currency,
+            payer_message,
+            payee_note,
+            payer_identification_type,
+            payer_identification_number,
+            payer_identity,
+            payer_first_name,
+            payer_surname,
+            payer_language_code,
+            payer_email,
+            payer_msisdn,
+            payer_gender,
+        }
     }
 }
-
-
-
 
 impl From<CashTransferRequest> for Body {
     fn from(cash_transfer_request: CashTransferRequest) -> Self {

@@ -1,11 +1,9 @@
 #[doc(hidden)]
 use reqwest::Body;
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::structs::party::Party;
-
-
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct InvoiceRequest {
@@ -22,7 +20,14 @@ pub struct InvoiceRequest {
 }
 
 impl InvoiceRequest {
-    pub fn new(amount: String, currency: String, validity_duration: String, intended_payer: Party, payee: Party, description: String) -> Self {
+    pub fn new(
+        amount: String,
+        currency: String,
+        validity_duration: String,
+        intended_payer: Party,
+        payee: Party,
+        description: String,
+    ) -> Self {
         let external_id = uuid::Uuid::new_v4().to_string();
         InvoiceRequest {
             external_id,
@@ -31,13 +36,10 @@ impl InvoiceRequest {
             validity_duration,
             intended_payer,
             payee,
-            description
+            description,
         }
     }
-    
 }
-
-
 
 impl From<InvoiceRequest> for Body {
     fn from(invoice_request: InvoiceRequest) -> Self {

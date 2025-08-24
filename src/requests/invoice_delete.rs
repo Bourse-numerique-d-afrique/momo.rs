@@ -1,16 +1,13 @@
 #[doc(hidden)]
 use reqwest::Body;
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InvoiceDelete {
     #[serde(rename = "externalId")]
     pub external_id: String,
 }
-
-
 
 impl From<InvoiceDelete> for Body {
     fn from(invoice_delete: InvoiceDelete) -> Self {

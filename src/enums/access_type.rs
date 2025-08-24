@@ -2,8 +2,7 @@
 use std::fmt;
 
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub enum AccessType {
@@ -12,7 +11,6 @@ pub enum AccessType {
     #[serde(rename = "offline")]
     Offline,
 }
-
 
 impl fmt::Display for AccessType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

@@ -1,6 +1,5 @@
-
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::enums::currency::Currency;
 

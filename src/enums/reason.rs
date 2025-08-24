@@ -11,20 +11,20 @@ pub enum RequestToPayReason {
     ONGOING,
     #[serde(rename = "PAYER_DELAYED")]
     PAYERDELAYED,
-     #[serde(rename = "PAYER_NOT_FOUND")]
+    #[serde(rename = "PAYER_NOT_FOUND")]
     PAYERNOTFOUND,
-     #[serde(rename = "PAYEE_NOT_ALLOWED_TO_RECEIVE")]
+    #[serde(rename = "PAYEE_NOT_ALLOWED_TO_RECEIVE")]
     PAYEENOTALLOWEDTORECEIVE,
-     #[serde(rename = "NOT_ALLOWED")]
+    #[serde(rename = "NOT_ALLOWED")]
     NOTALLOWED,
-     #[serde(rename = "NOT_ALLOWED_TARGET_ENVIRONMENT")]
+    #[serde(rename = "NOT_ALLOWED_TARGET_ENVIRONMENT")]
     NOTALLOWEDTARGETENVIRONMENT,
-     #[serde(rename = "INVALID_CALLBACK_URL_HOST")]
+    #[serde(rename = "INVALID_CALLBACK_URL_HOST")]
     INVALIDCALLBACKURLHOST,
-     #[serde(rename = "INVALID_CURRENCY")]
+    #[serde(rename = "INVALID_CURRENCY")]
     INVALIDCURRENCY,
-     #[serde(rename = "SERVICE_UNAVAILABLE")]
+    #[serde(rename = "SERVICE_UNAVAILABLE")]
     SERVICEUNAVAILABLE,
-     #[serde(rename = "COULD_NOT_PERFORM_TRANSACTION")]
+    #[serde(rename = "COULD_NOT_PERFORM_TRANSACTION")]
     COULDNOTPERFORMTRANSACTION,
 }

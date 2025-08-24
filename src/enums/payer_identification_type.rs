@@ -1,11 +1,8 @@
-
 #[doc(hidden)]
 use std::fmt;
 
-
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub enum PayerIdentificationType {
@@ -20,7 +17,6 @@ pub enum PayerIdentificationType {
     IDCD,
     EMID,
 }
-
 
 impl fmt::Display for PayerIdentificationType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

@@ -36,10 +36,7 @@ impl Account {
             let balance: Balance = serde_json::from_str(&body)?;
             Ok(balance)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -82,10 +79,7 @@ impl Account {
             let balance: Balance = serde_json::from_str(&body)?;
             Ok(balance)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -128,10 +122,7 @@ impl Account {
             let basic_user_info: BasicUserInfoJsonResponse = serde_json::from_str(&body)?;
             Ok(basic_user_info)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -169,10 +160,7 @@ impl Account {
             let basic_user_info: BasicUserInfoJsonResponse = serde_json::from_str(&body)?;
             Ok(basic_user_info)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -216,10 +204,7 @@ impl Account {
         if res.status().is_success() {
             Ok(())
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 }

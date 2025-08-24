@@ -10,11 +10,11 @@
 //!
 
 use crate::{
+    common::{http_client::MomoHttpClient, token_manager::ProductType},
     BCAuthorizeResponse, Balance, BasicUserInfoJsonResponse, CreatePaymentRequest, Currency,
     DeliveryNotificationRequest, Environment, InvoiceDeleteRequest, InvoiceId, InvoiceRequest,
     InvoiceResult, OAuth2TokenResponse, PaymentId, PaymentResult, PreApprovalRequest,
     PreApprovalResult, RequestToPay, RequestToPayResult, TokenResponse, TransactionId, WithdrawId,
-    common::{http_client::MomoHttpClient, token_manager::ProductType}
 };
 
 use super::{account::Account, auth::Authorization};
@@ -61,7 +61,7 @@ impl Collection {
         let http_client = MomoHttpClient::new(
             url.clone(),
             ProductType::Collection,
-            environment.clone(),
+            environment,
             api_user.clone(),
             api_key.clone(),
             primary_key.clone(),
@@ -78,7 +78,6 @@ impl Collection {
             http_client,
         }
     }
-
 
     /// This operation is used to create an OAuth2 token
     ///
@@ -100,7 +99,7 @@ impl Collection {
                 url,
                 self.api_user.clone(),
                 self.api_key.clone(),
-                self.environment.clone(),
+                self.environment,
                 self.primary_key.clone(),
                 auth_req_id,
             )
@@ -124,16 +123,19 @@ impl Collection {
         callback_url: Option<&str>,
     ) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
         let url = format!("{}/collection", self.url);
-        let access_token: TokenResponse = self.auth.create_access_token(
-            url.clone(),
-            self.api_user.clone(),
-            self.api_key.clone(),
-            self.primary_key.clone(),
-        ).await?;
+        let access_token: TokenResponse = self
+            .auth
+            .create_access_token(
+                url.clone(),
+                self.api_user.clone(),
+                self.api_key.clone(),
+                self.primary_key.clone(),
+            )
+            .await?;
         self.auth
             .bc_authorize(
                 url,
-                self.environment.clone(),
+                self.environment,
                 self.primary_key.clone(),
                 msisdn,
                 callback_url,
@@ -141,7 +143,6 @@ impl Collection {
             )
             .await
     }
-
 
     /// This operation is used to cancel an invoice.
     ///
@@ -184,8 +185,7 @@ impl Collection {
         if res.status().is_success() {
             Ok(())
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -229,8 +229,7 @@ impl Collection {
             Ok(InvoiceId::new(invoice.external_id))
         } else {
             let res_clone = res.text().await?;
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res_clone,
             )))
         }
@@ -272,8 +271,7 @@ impl Collection {
         if res.status().is_success() {
             Ok(PaymentId::new(payment.external_transaction_id))
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -311,8 +309,7 @@ impl Collection {
             let invoice_status: InvoiceResult = serde_json::from_str(&body)?;
             Ok(invoice_status)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -351,8 +348,7 @@ impl Collection {
             let payment_status: PaymentResult = serde_json::from_str(&body)?;
             Ok(payment_status)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -392,8 +388,7 @@ impl Collection {
             let pre_approval_status: PreApprovalResult = serde_json::from_str(&body)?;
             Ok(pre_approval_status)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -426,8 +421,7 @@ impl Collection {
         if res.status().is_success() {
             Ok(external_id)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -476,9 +470,11 @@ impl Collection {
         } else {
             let status_code = res.status().as_u16();
             let error_text = res.text().await?;
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("{{ \"statusCode\": {}, \"message\": \"{}\" }}", status_code, error_text),
+            Err(Box::new(std::io::Error::other(
+                format!(
+                    "{{ \"statusCode\": {}, \"message\": \"{}\" }}",
+                    status_code, error_text
+                ),
             )))
         }
     }
@@ -518,8 +514,7 @@ impl Collection {
         if res.status().is_success() {
             Ok(())
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -557,8 +552,7 @@ impl Collection {
             let request_to_pay_result: RequestToPayResult = serde_json::from_str(&body)?;
             Ok(request_to_pay_result)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -594,8 +588,7 @@ impl Collection {
             let request_to_pay_result: RequestToPayResult = serde_json::from_str(&body)?;
             Ok(request_to_pay_result)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -637,8 +630,7 @@ impl Collection {
         if res.status().is_success() {
             Ok(WithdrawId::new(request.external_id))
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -657,7 +649,6 @@ impl Collection {
     /// # Returns
     ///
     /// * 'WithdrawId', the reference id of the request
-
     pub async fn request_to_withdraw_v2(
         &self,
         request: RequestToPay,
@@ -685,8 +676,7 @@ impl Collection {
         if res.status().is_success() {
             Ok(WithdrawId::new(request.external_id))
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -1491,7 +1481,10 @@ mod tests {
         match res {
             Ok(_) => println!("Account validation successful"),
             Err(e) => {
-                println!("Account validation failed (this may be expected in test environment): {:?}", e);
+                println!(
+                    "Account validation failed (this may be expected in test environment): {:?}",
+                    e
+                );
                 return;
             }
         }

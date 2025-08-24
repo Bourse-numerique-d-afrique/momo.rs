@@ -13,11 +13,12 @@ use poem::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::{CallbackType, Party};
 use poem::Result;
 use poem::{handler, Route, Server};
-use crate::{CallbackType, Party};
 
 #[derive(thiserror::Error, Debug)]
+#[allow(dead_code)]
 enum CallbackError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
@@ -29,7 +30,7 @@ enum CallbackError {
     JsonError(#[from] serde_json::Error),
 
     #[error("SendError error: {0}")]
-    SendError(#[from] tokio::sync::mpsc::error::SendError<MomoUpdates>),
+    SendError(#[from] Box<tokio::sync::mpsc::error::SendError<MomoUpdates>>),
 }
 
 /// MTN momo error Reason
@@ -262,7 +263,7 @@ async fn mtn_callback(
     let string = body.into_string().await?;
     let response_result: Result<CallbackResponse, serde_json::Error> =
         serde_json::from_str(&string);
-        
+
     match response_result {
         Ok(response) => {
             let momo_updates = MomoUpdates {
@@ -270,7 +271,7 @@ async fn mtn_callback(
                 response,
                 update_type: CallbackType::from_string(&callback_type),
             };
-            
+
             if let Err(e) = sender.send(momo_updates).await {
                 eprintln!("Failed to send callback update: {}", e);
             }
@@ -279,7 +280,7 @@ async fn mtn_callback(
             eprintln!("Failed to parse callback response: {}", e);
         }
     }
-    
+
     Ok(poem::Response::builder()
         .status(poem::http::StatusCode::OK)
         .body("Callback received successfully"))
@@ -353,7 +354,7 @@ impl MomoCallbackListener {
                 "remittance_transfer/:callback_type",
                 post(mtn_callback).put(mtn_callback),
             )
-            .with(poem::middleware::Tracing::default())
+            .with(poem::middleware::Tracing)
             .with(poem::middleware::Cors::new())
             .with(poem::middleware::Compression::default())
             .with(poem::middleware::RequestId::default())

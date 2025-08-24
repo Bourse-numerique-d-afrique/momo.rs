@@ -105,7 +105,7 @@ impl Disbursements {
             url,
             self.api_user.clone(),
             self.api_key.clone(),
-            self.environment.clone(),
+            self.environment,
             self.primary_key.clone(),
             auth_req_id,
         )
@@ -133,7 +133,7 @@ impl Disbursements {
         let access_token: TokenResponse = self.create_access_token().await?;
         auth.bc_authorize(
             url,
-            self.environment.clone(),
+            self.environment,
             self.primary_key.clone(),
             msisdn,
             callback_url,
@@ -163,7 +163,7 @@ impl Disbursements {
             }
         }
         let token: TokenResponse = self.create_access_token().await?;
-        return Ok(token);
+        Ok(token)
     }
 
     /// Deposit operation is used to deposit an amount from the owner’s account to a payee account.
@@ -204,8 +204,7 @@ impl Disbursements {
         if res.status().is_success() {
             Ok(DepositId::new(transfer.external_id))
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -249,8 +248,7 @@ impl Disbursements {
         if res.status().is_success() {
             Ok(DepositId::new(transfer.external_id))
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -289,8 +287,7 @@ impl Disbursements {
             let transfer_result: TransferResult = serde_json::from_str(&body)?;
             Ok(transfer_result)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -329,8 +326,7 @@ impl Disbursements {
             let refund_result: RefundResult = serde_json::from_str(&body)?;
             Ok(refund_result)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -369,8 +365,7 @@ impl Disbursements {
             let transfer_result: TransferResult = serde_json::from_str(&body)?;
             Ok(transfer_result)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -415,8 +410,7 @@ impl Disbursements {
         if res.status().is_success() {
             Ok(RefundId::new(refund_id))
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -461,8 +455,7 @@ impl Disbursements {
         if res.status().is_success() {
             Ok(RefundId::new(refund_id))
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -505,8 +498,7 @@ impl Disbursements {
         if res.status().is_success() {
             Ok(TranserId::new(transfer.external_id))
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -748,7 +740,10 @@ mod tests {
         match validate_account_holder_status_result {
             Ok(_) => println!("Account validation successful"),
             Err(e) => {
-                println!("Account validation failed (this may be expected in test environment): {:?}", e);
+                println!(
+                    "Account validation failed (this may be expected in test environment): {:?}",
+                    e
+                );
                 return;
             }
         }
@@ -1093,9 +1088,7 @@ mod tests {
         // Test may fail in sandbox, but we want to ensure the endpoint responds
         match refund_res {
             Ok(refund_id) => {
-                let refund_status_res = disbursements
-                    .get_refund_status(refund_id.as_str())
-                    .await;
+                let refund_status_res = disbursements.get_refund_status(refund_id.as_str()).await;
                 match refund_status_res {
                     Ok(status) => {
                         assert_ne!(status.status.len(), 0);

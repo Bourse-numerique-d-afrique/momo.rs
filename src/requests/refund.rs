@@ -1,10 +1,8 @@
-
 #[doc(hidden)]
 use reqwest::Body;
 
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Refund {
@@ -21,7 +19,13 @@ pub struct Refund {
 }
 
 impl Refund {
-    pub fn new(amount: String, currency: String, payer_message: String, payee_note: String, reference_id_to_refund: String) -> Self {
+    pub fn new(
+        amount: String,
+        currency: String,
+        payer_message: String,
+        payee_note: String,
+        reference_id_to_refund: String,
+    ) -> Self {
         let external_id = uuid::Uuid::new_v4().to_string();
         Refund {
             amount,
@@ -29,7 +33,7 @@ impl Refund {
             external_id,
             payer_message,
             payee_note,
-            reference_id_to_refund
+            reference_id_to_refund,
         }
     }
 }

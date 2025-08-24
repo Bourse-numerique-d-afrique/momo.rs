@@ -1,10 +1,7 @@
-
-
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::structs::party::Party;
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PreApprovalResult {
@@ -13,5 +10,5 @@ pub struct PreApprovalResult {
     pub payer_currency: String,
     pub status: String,
     #[serde(rename = "expirationDateTime")]
-    pub expiration_date_time: String
+    pub expiration_date_time: String,
 }

@@ -2,10 +2,9 @@
 use reqwest::Body;
 
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::structs::money::Money;
-
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CreatePayment {
@@ -33,10 +32,22 @@ pub struct CreatePayment {
 }
 
 impl CreatePayment {
-    pub fn new(money: Money, customer_reference: String, service_provider_user_name: String, coupon_id: String, product_id: String, product_offering_id: String, receiver_message: String, sender_note: String, max_number_of_retries: i32, include_sender_charges: bool) -> Self {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        money: Money,
+        customer_reference: String,
+        service_provider_user_name: String,
+        coupon_id: String,
+        product_id: String,
+        product_offering_id: String,
+        receiver_message: String,
+        sender_note: String,
+        max_number_of_retries: i32,
+        include_sender_charges: bool,
+    ) -> Self {
         let external_id = uuid::Uuid::new_v4().to_string();
         CreatePayment {
-            external_transaction_id:external_id,
+            external_transaction_id: external_id,
             money,
             customer_reference,
             service_provider_user_name,
@@ -46,11 +57,10 @@ impl CreatePayment {
             receiver_message,
             sender_note,
             max_number_of_retries,
-            include_sender_charges
+            include_sender_charges,
         }
     }
 }
-
 
 impl From<CreatePayment> for Body {
     fn from(create_payment: CreatePayment) -> Self {

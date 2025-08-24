@@ -1,10 +1,10 @@
-use std::sync::Arc;
+use crate::responses::token_response::TokenResponse;
 use chrono::Utc;
 use once_cell::sync::Lazy;
+use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::responses::token_response::TokenResponse;
 
-static TOKEN_STORAGE: Lazy<Arc<RwLock<TokenStorage>>> = 
+static TOKEN_STORAGE: Lazy<Arc<RwLock<TokenStorage>>> =
     Lazy::new(|| Arc::new(RwLock::new(TokenStorage::new())));
 
 #[derive(Debug, Clone)]
@@ -70,7 +70,8 @@ impl TokenManager {
 
     fn is_token_valid(token: &TokenResponse) -> bool {
         let now = Utc::now();
-        let expiry_time = token.created_at.unwrap() + chrono::Duration::seconds(token.expires_in as i64);
+        let expiry_time =
+            token.created_at.unwrap() + chrono::Duration::seconds(token.expires_in as i64);
         now < expiry_time
     }
 }

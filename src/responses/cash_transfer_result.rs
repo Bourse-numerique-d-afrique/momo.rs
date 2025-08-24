@@ -1,10 +1,7 @@
-
-
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::structs::party::Party;
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CashTransferResult {

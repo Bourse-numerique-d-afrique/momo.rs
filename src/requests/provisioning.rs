@@ -2,16 +2,13 @@
 use reqwest::Body;
 
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
-
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProvisioningRequest {
     #[serde(rename = "providerCallbackHost")]
-    pub provider_callback_host: String
+    pub provider_callback_host: String,
 }
-
 
 impl From<ProvisioningRequest> for Body {
     fn from(provisioning_request: ProvisioningRequest) -> Self {

@@ -1,29 +1,32 @@
-
-
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[doc(hidden)]
 use reqwest::Body;
 
-use crate::{structs::party::Party, enums::currency::Currency};
+use crate::{enums::currency::Currency, structs::party::Party};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Transfer {
-    pub amount : String,
-    pub currency : Currency,
+    pub amount: String,
+    pub currency: Currency,
     #[serde(rename = "externalId")]
-    pub external_id : String,
-    pub payee : Party,
+    pub external_id: String,
+    pub payee: Party,
     #[serde(rename = "payerMessage")]
-    pub payer_message : String,
+    pub payer_message: String,
     #[serde(rename = "payeeNote")]
-    pub payee_note : String,
+    pub payee_note: String,
 }
 
-
 impl Transfer {
-    pub fn new(amount: String, currency: Currency, payee: Party, payer_message: String, payee_note: String) -> Self {
+    pub fn new(
+        amount: String,
+        currency: Currency,
+        payee: Party,
+        payer_message: String,
+        payee_note: String,
+    ) -> Self {
         let external_id = uuid::Uuid::new_v4().to_string();
         Transfer {
             amount,
@@ -31,7 +34,7 @@ impl Transfer {
             external_id,
             payee,
             payer_message,
-            payee_note
+            payee_note,
         }
     }
 }

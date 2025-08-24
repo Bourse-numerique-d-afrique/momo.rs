@@ -112,7 +112,7 @@ impl Remittance {
             url,
             self.api_user.clone(),
             self.api_key.clone(),
-            self.environment.clone(),
+            self.environment,
             self.primary_key.clone(),
             auth_req_id,
         )
@@ -140,7 +140,7 @@ impl Remittance {
         let access_token: TokenResponse = self.create_access_token().await?;
         auth.bc_authorize(
             url,
-            self.environment.clone(),
+            self.environment,
             self.primary_key.clone(),
             msisdn,
             callback_url,
@@ -170,7 +170,7 @@ impl Remittance {
             }
         }
         let token: TokenResponse = self.create_access_token().await?;
-        return Ok(token);
+        Ok(token)
     }
 
     /// Cash transfer operation is used to transfer an amount from the owner’s account to a payee account.
@@ -210,8 +210,7 @@ impl Remittance {
         if res.status().is_success() {
             Ok(transfer.external_id)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -248,8 +247,7 @@ impl Remittance {
             let cash_transfer_result: CashTransferResult = serde_json::from_str(&body)?;
             Ok(cash_transfer_result)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -286,8 +284,7 @@ impl Remittance {
         if res.status().is_success() {
             Ok(TranserId::new(transfer.external_id))
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -326,8 +323,7 @@ impl Remittance {
             let transfer_result: TransferResult = serde_json::from_str(&body)?;
             Ok(transfer_result)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }

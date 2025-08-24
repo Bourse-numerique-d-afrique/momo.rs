@@ -57,10 +57,9 @@ impl Provisioning {
             .await?;
 
         if res.status().is_success() {
-            return Ok(());
+            Ok(())
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -91,10 +90,9 @@ impl Provisioning {
             .await?;
 
         if res.status().is_success() {
-            return Ok(());
+            Ok(())
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }
@@ -129,8 +127,7 @@ impl Provisioning {
             let api_key: ApiUserKeyResult = serde_json::from_str(&response)?;
             Ok(api_key)
         } else {
-            Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(Box::new(std::io::Error::other(
                 res.text().await?,
             )))
         }

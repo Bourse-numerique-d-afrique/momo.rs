@@ -1,10 +1,8 @@
 #[doc(hidden)]
 use std::fmt;
 
-
 #[doc(hidden)]
-use serde::{Serialize, Deserialize};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub enum PartyIdType {
@@ -12,8 +10,6 @@ pub enum PartyIdType {
     EMAIL,
     PARTYCODE,
 }
-
-
 
 impl fmt::Display for PartyIdType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
