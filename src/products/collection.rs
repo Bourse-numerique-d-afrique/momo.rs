@@ -185,9 +185,7 @@ impl Collection {
         if res.status().is_success() {
             Ok(())
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -229,9 +227,7 @@ impl Collection {
             Ok(InvoiceId::new(invoice.external_id))
         } else {
             let res_clone = res.text().await?;
-            Err(Box::new(std::io::Error::other(
-                res_clone,
-            )))
+            Err(Box::new(std::io::Error::other(res_clone)))
         }
     }
 
@@ -271,9 +267,7 @@ impl Collection {
         if res.status().is_success() {
             Ok(PaymentId::new(payment.external_transaction_id))
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -309,9 +303,7 @@ impl Collection {
             let invoice_status: InvoiceResult = serde_json::from_str(&body)?;
             Ok(invoice_status)
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -348,9 +340,7 @@ impl Collection {
             let payment_status: PaymentResult = serde_json::from_str(&body)?;
             Ok(payment_status)
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -388,9 +378,7 @@ impl Collection {
             let pre_approval_status: PreApprovalResult = serde_json::from_str(&body)?;
             Ok(pre_approval_status)
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -421,9 +409,7 @@ impl Collection {
         if res.status().is_success() {
             Ok(external_id)
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -470,12 +456,10 @@ impl Collection {
         } else {
             let status_code = res.status().as_u16();
             let error_text = res.text().await?;
-            Err(Box::new(std::io::Error::other(
-                format!(
-                    "{{ \"statusCode\": {}, \"message\": \"{}\" }}",
-                    status_code, error_text
-                ),
-            )))
+            Err(Box::new(std::io::Error::other(format!(
+                "{{ \"statusCode\": {}, \"message\": \"{}\" }}",
+                status_code, error_text
+            ))))
         }
     }
 
@@ -514,9 +498,7 @@ impl Collection {
         if res.status().is_success() {
             Ok(())
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -552,9 +534,7 @@ impl Collection {
             let request_to_pay_result: RequestToPayResult = serde_json::from_str(&body)?;
             Ok(request_to_pay_result)
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -588,9 +568,7 @@ impl Collection {
             let request_to_pay_result: RequestToPayResult = serde_json::from_str(&body)?;
             Ok(request_to_pay_result)
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -630,9 +608,7 @@ impl Collection {
         if res.status().is_success() {
             Ok(WithdrawId::new(request.external_id))
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -676,9 +652,7 @@ impl Collection {
         if res.status().is_success() {
             Ok(WithdrawId::new(request.external_id))
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 

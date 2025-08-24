@@ -204,9 +204,7 @@ impl Disbursements {
         if res.status().is_success() {
             Ok(DepositId::new(transfer.external_id))
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -248,9 +246,7 @@ impl Disbursements {
         if res.status().is_success() {
             Ok(DepositId::new(transfer.external_id))
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -287,9 +283,7 @@ impl Disbursements {
             let transfer_result: TransferResult = serde_json::from_str(&body)?;
             Ok(transfer_result)
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -326,9 +320,7 @@ impl Disbursements {
             let refund_result: RefundResult = serde_json::from_str(&body)?;
             Ok(refund_result)
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -365,9 +357,7 @@ impl Disbursements {
             let transfer_result: TransferResult = serde_json::from_str(&body)?;
             Ok(transfer_result)
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -410,9 +400,7 @@ impl Disbursements {
         if res.status().is_success() {
             Ok(RefundId::new(refund_id))
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -455,9 +443,7 @@ impl Disbursements {
         if res.status().is_success() {
             Ok(RefundId::new(refund_id))
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -498,9 +484,7 @@ impl Disbursements {
         if res.status().is_success() {
             Ok(TranserId::new(transfer.external_id))
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 

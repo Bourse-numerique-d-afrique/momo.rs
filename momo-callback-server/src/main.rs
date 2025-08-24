@@ -1,81 +1,4 @@
-//! # MTN MoMo Callback Server
-//!
-//! A production-ready, standalone TLS-enabled callback server for handling MTN MoMo payment callbacks.
-//! This server provides a secure HTTPS endpoint listening on port 443 with TLS encryption and processes
-//! all types of MTN MoMo callbacks including payments, invoices, disbursements, and remittances.
-//!
-//! ## Features
-//!
-//! - **🔒 TLS/HTTPS Support**: Secure server with certificate-based encryption
-//! - **📡 Complete Callback Coverage**: Handles all MTN MoMo callback types
-//! - **💊 Health Monitoring**: Built-in health check endpoint
-//! - **🛡️ Production Ready**: Graceful shutdown, structured logging, error handling
-//! - **⚙️ Environment Configuration**: Configurable via environment variables
-//! - **🔧 Extensible**: Easy-to-extend callback handlers for custom business logic
-//!
-//! ## Quick Start
-//!
-//! ```bash
-//! # Build the server
-//! cargo build --release
-//!
-//! # Prepare TLS certificates (cert.pem and key.pem)
-//! # Run the server
-//! ./target/release/momo-callback-server
-//! ```
-//!
-//! ## Configuration
-//!
-//! The server uses environment variables for configuration:
-//!
-//! - `TLS_CERT_PATH`: Path to TLS certificate file (default: "cert.pem")
-//! - `TLS_KEY_PATH`: Path to TLS private key file (default: "key.pem")
-//!
-//! ## Architecture
-//!
-//! The callback server is built using the following components:
-//!
-//! - **Web Framework**: [poem](https://crates.io/crates/poem) with TLS support
-//! - **Async Runtime**: [tokio](https://crates.io/crates/tokio) for high-performance async I/O
-//! - **Logging**: [tracing](https://crates.io/crates/tracing) for structured logging
-//! - **TLS**: [rustls](https://crates.io/crates/rustls) for secure connections
-//! - **JSON Processing**: [serde_json](https://crates.io/crates/serde_json) for callback parsing
-//!
-//! ## Callback Flow
-//!
-//! 1. MTN MoMo API sends callback to registered URL
-//! 2. Server receives HTTPS POST request
-//! 3. Request is parsed and validated as JSON
-//! 4. Callback is routed to appropriate handler based on type
-//! 5. Custom business logic processes the callback
-//! 6. Server responds with success confirmation
-//!
-//! ## Example Usage
-//!
-//! ```rust,no_run
-//! use mtnmomo::{Momo, RequestToPay, Party, PartyIdType, Currency};
-//!
-//! // Configure MTN MoMo API to use your callback server
-//! let callback_url = "https://your-domain.com/collection_request_to_pay/REQUEST_TO_PAY";
-//! let result = collection.request_to_pay(request, Some(callback_url)).await;
-//! ```
-//!
-//! ## Security Considerations
-//!
-//! - All communications use TLS 1.2+ encryption
-//! - Certificate validation is performed on startup
-//! - All callback requests are logged for audit purposes
-//! - JSON payload validation prevents malformed requests
-//! - Failed callbacks are logged with detailed error information
-//!
-//! ## Error Handling
-//!
-//! The server implements comprehensive error handling:
-//!
-//! - Invalid JSON payloads are logged but don't crash the server
-//! - TLS errors are reported with detailed diagnostics
-//! - Network failures are handled gracefully with retries
-//! - All errors include contextual information for debugging
+// MTN MoMo Callback Server - Main executable
 
 use std::env;
 use std::error::Error;
@@ -569,9 +492,14 @@ async fn load_tls_config(config: &CallbackServerConfig) -> Result<RustlsConfig, 
     let cert_data = std::fs::read(&config.cert_path)?;
     let key_data = std::fs::read(&config.key_path)?;
     
-    let tls_config = RustlsConfig::new()
+    use poem::listener::RustlsCertificate;
+    
+    let certificate = RustlsCertificate::new()
         .cert(cert_data)
         .key(key_data);
+        
+    let tls_config = RustlsConfig::new()
+        .fallback(certificate);
 
     info!("TLS configuration loaded successfully");
     Ok(tls_config)
@@ -758,6 +686,7 @@ pub async fn start_callback_server(
 }
 
 #[tokio::main]
+#[allow(dead_code)]
 async fn main() -> Result<(), Box<dyn Error>> {
     // Initialize tracing
     tracing_subscriber::fmt()
@@ -796,27 +725,42 @@ async fn main() -> Result<(), Box<dyn Error>> {
         match update.update_type {
             CallbackType::RequestToPay => {
                 info!("Processing payment callback: {:?}", update.response);
-                // Add your payment processing logic here
                 handle_payment_callback(&update).await;
             }
             CallbackType::Invoice => {
                 info!("Processing invoice callback: {:?}", update.response);
-                // Add your invoice processing logic here
                 handle_invoice_callback(&update).await;
             }
-            CallbackType::DisbursementDepositV1 | CallbackType::DisbursementDepositV2 => {
-                info!("Processing disbursement callback: {:?}", update.response);
-                // Add your disbursement processing logic here
+            CallbackType::DisbursementDepositV1 => {
+                info!("Processing disbursement deposit v1 callback: {:?}", update.response);
                 handle_disbursement_callback(&update).await;
             }
-            CallbackType::RemittanceTransfer | CallbackType::RemittanceCashTransfer => {
-                info!("Processing remittance callback: {:?}", update.response);
-                // Add your remittance processing logic here
+            CallbackType::DisbursementDepositV2 => {
+                info!("Processing disbursement deposit v2 callback: {:?}", update.response);
+                handle_disbursement_callback(&update).await;
+            }
+            CallbackType::DisbursementRefundV1 => {
+                info!("Processing disbursement refund v1 callback: {:?}", update.response);
+                handle_disbursement_callback(&update).await;
+            }
+            CallbackType::DisbursementRefundV2 => {
+                info!("Processing disbursement refund v2 callback: {:?}", update.response);
+                handle_disbursement_callback(&update).await;
+            }
+            CallbackType::DisbusrementTransfer => {
+                info!("Processing disbursement transfer callback: {:?}", update.response);
+                handle_disbursement_callback(&update).await;
+            }
+            CallbackType::RemittanceCashTransfer => {
+                info!("Processing remittance cash transfer callback: {:?}", update.response);
+                handle_remittance_callback(&update).await;
+            }
+            CallbackType::RemittanceTransfer => {
+                info!("Processing remittance transfer callback: {:?}", update.response);
                 handle_remittance_callback(&update).await;
             }
             _ => {
                 info!("Processing other callback type: {:?}", update.response);
-                // Add your generic callback processing logic here
                 handle_generic_callback(&update).await;
             }
         }
@@ -924,6 +868,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 ///     }
 /// }
 /// ```
+#[allow(dead_code)]
 async fn handle_payment_callback(update: &MomoUpdates) {
     info!("Payment callback processing started");
     
@@ -931,7 +876,7 @@ async fn handle_payment_callback(update: &MomoUpdates) {
     match &update.response {
         CallbackResponse::RequestToPaySuccess {
             external_id,
-            status,
+            status: _,
             financial_transaction_id,
             amount,
             currency,
@@ -944,7 +889,7 @@ async fn handle_payment_callback(update: &MomoUpdates) {
         }
         CallbackResponse::RequestToPayFailed {
             external_id,
-            status,
+            status: _,
             reason,
             amount,
             currency,
@@ -1024,7 +969,7 @@ async fn handle_payment_callback(update: &MomoUpdates) {
 ///         CallbackResponse::InvoiceFailed { 
 ///             external_id, 
 ///             reference_id, 
-///             erron_reason,
+///             error_reason,
 ///             .. 
 ///         } => {
 ///             // Update invoice status
@@ -1047,6 +992,7 @@ async fn handle_payment_callback(update: &MomoUpdates) {
 ///     }
 /// }
 /// ```
+#[allow(dead_code)]
 async fn handle_invoice_callback(update: &MomoUpdates) {
     info!("Invoice callback processing started");
     
@@ -1055,7 +1001,7 @@ async fn handle_invoice_callback(update: &MomoUpdates) {
         CallbackResponse::InvoiceSucceeded {
             external_id,
             reference_id,
-            status,
+            status: _,
             amount,
             currency,
             ..
@@ -1067,12 +1013,12 @@ async fn handle_invoice_callback(update: &MomoUpdates) {
         CallbackResponse::InvoiceFailed {
             external_id,
             reference_id,
-            status,
-            erron_reason,
+            status: _,
+            error_reason,
             ..
         } => {
             info!("Invoice failed - External ID: {}, Reference ID: {}, Reason: {:?}", 
-                  external_id, reference_id, erron_reason);
+                  external_id, reference_id, error_reason);
             // e.g., handle invoice failure
         }
         _ => {
@@ -1165,6 +1111,7 @@ async fn handle_invoice_callback(update: &MomoUpdates) {
 ///     }
 /// }
 /// ```
+#[allow(dead_code)]
 async fn handle_disbursement_callback(update: &MomoUpdates) {
     info!("Disbursement callback processing started");
     
@@ -1172,26 +1119,133 @@ async fn handle_disbursement_callback(update: &MomoUpdates) {
     match &update.response {
         CallbackResponse::PaymentSucceeded {
             reference_id,
-            status,
+            status: _,
             financial_transaction_id,
         } => {
             info!("Disbursement successful - Reference ID: {}, Transaction ID: {}", 
                   reference_id, financial_transaction_id);
-            // e.g., update disbursement records
         }
         CallbackResponse::PaymentFailed {
             reference_id,
-            status,
+            status: _,
             financial_transaction_id,
             reason,
         } => {
             info!("Disbursement failed - Reference ID: {}, Transaction ID: {}, Reason: {:?}", 
                   reference_id, financial_transaction_id, reason);
-            // e.g., handle disbursement failure
+        }
+        CallbackResponse::DisbursementDepositV1Success {
+            external_id,
+            financial_transaction_id,
+            amount,
+            currency,
+            status: _,
+            ..
+        } => {
+            info!("Disbursement deposit v1 successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
+                  external_id, financial_transaction_id, amount, currency);
+        }
+        CallbackResponse::DisbursementDepositV1Failed {
+            external_id,
+            financial_transaction_id,
+            amount,
+            currency,
+            reason,
+            ..
+        } => {
+            info!("Disbursement deposit v1 failed - External ID: {}, Transaction ID: {}, Amount: {} {}, Reason: {:?}", 
+                  external_id, financial_transaction_id, amount, currency, reason);
+        }
+        CallbackResponse::DisbursementDepositV2Success {
+            external_id,
+            financial_transaction_id,
+            amount,
+            currency,
+            status: _,
+            ..
+        } => {
+            info!("Disbursement deposit v2 successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
+                  external_id, financial_transaction_id, amount, currency);
+        }
+        CallbackResponse::DisbursementDepositV2Failed {
+            external_id,
+            financial_transaction_id,
+            amount,
+            currency,
+            reason,
+            ..
+        } => {
+            info!("Disbursement deposit v2 failed - External ID: {}, Transaction ID: {}, Amount: {} {}, Reason: {:?}", 
+                  external_id, financial_transaction_id, amount, currency, reason);
+        }
+        CallbackResponse::DisbursementRefundV1Success {
+            external_id,
+            financial_transaction_id,
+            amount,
+            currency,
+            status: _,
+            ..
+        } => {
+            info!("Disbursement refund v1 successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
+                  external_id, financial_transaction_id, amount, currency);
+        }
+        CallbackResponse::DisbursementRefundV1Failed {
+            external_id,
+            financial_transaction_id,
+            amount,
+            currency,
+            reason,
+            ..
+        } => {
+            info!("Disbursement refund v1 failed - External ID: {}, Transaction ID: {}, Amount: {} {}, Reason: {:?}", 
+                  external_id, financial_transaction_id, amount, currency, reason);
+        }
+        CallbackResponse::DisbursementRefundV2Success {
+            external_id,
+            financial_transaction_id,
+            amount,
+            currency,
+            status: _,
+            ..
+        } => {
+            info!("Disbursement refund v2 successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
+                  external_id, financial_transaction_id, amount, currency);
+        }
+        CallbackResponse::DisbursementRefundV2Failed {
+            external_id,
+            financial_transaction_id,
+            amount,
+            currency,
+            reason,
+            ..
+        } => {
+            info!("Disbursement refund v2 failed - External ID: {}, Transaction ID: {}, Amount: {} {}, Reason: {:?}", 
+                  external_id, financial_transaction_id, amount, currency, reason);
+        }
+        CallbackResponse::DisbursementTransferSuccess {
+            external_id,
+            financial_transaction_id,
+            amount,
+            currency,
+            status: _,
+            ..
+        } => {
+            info!("Disbursement transfer successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
+                  external_id, financial_transaction_id, amount, currency);
+        }
+        CallbackResponse::DisbursementTransferFailed {
+            external_id,
+            financial_transaction_id,
+            amount,
+            currency,
+            reason,
+            ..
+        } => {
+            info!("Disbursement transfer failed - External ID: {}, Transaction ID: {}, Amount: {} {}, Reason: {:?}", 
+                  external_id, financial_transaction_id, amount, currency, reason);
         }
         _ => {
             info!("Generic disbursement callback: {:?}", update.response);
-            // Handle other disbursement-related callbacks
         }
     }
 }
@@ -1299,6 +1353,7 @@ async fn handle_disbursement_callback(update: &MomoUpdates) {
 ///     }
 /// }
 /// ```
+#[allow(dead_code)]
 async fn handle_remittance_callback(update: &MomoUpdates) {
     info!("Remittance callback processing started");
     
@@ -1307,18 +1362,51 @@ async fn handle_remittance_callback(update: &MomoUpdates) {
         CallbackResponse::CashTransferSucceeded {
             external_id,
             financial_transaction_id,
-            status,
+            status: _,
             amount,
             currency,
             ..
         } => {
-            info!("Remittance successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
+            info!("Remittance cash transfer successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
                   external_id, financial_transaction_id, amount, currency);
-            // e.g., update remittance status
+        }
+        CallbackResponse::CashTransferFailed {
+            external_id,
+            financial_transaction_id,
+            status: _,
+            amount,
+            currency,
+            error_reason,
+            ..
+        } => {
+            info!("Remittance cash transfer failed - External ID: {}, Transaction ID: {}, Amount: {} {}, Reason: {:?}", 
+                  external_id, financial_transaction_id, amount, currency, error_reason);
+        }
+        CallbackResponse::RemittanceTransferSuccess {
+            external_id,
+            financial_transaction_id,
+            status: _,
+            amount,
+            currency,
+            ..
+        } => {
+            info!("Remittance transfer successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
+                  external_id, financial_transaction_id, amount, currency);
+        }
+        CallbackResponse::RemittanceTransferFailed {
+            external_id,
+            financial_transaction_id,
+            status: _,
+            amount,
+            currency,
+            error_reason,
+            ..
+        } => {
+            info!("Remittance transfer failed - External ID: {}, Transaction ID: {}, Amount: {} {}, Reason: {:?}", 
+                  external_id, financial_transaction_id, amount, currency, error_reason);
         }
         _ => {
             info!("Generic remittance callback: {:?}", update.response);
-            // Handle other remittance-related callbacks
         }
     }
 }
@@ -1405,6 +1493,7 @@ async fn handle_remittance_callback(update: &MomoUpdates) {
 ///     }
 /// }
 /// ```
+#[allow(dead_code)]
 async fn handle_generic_callback(update: &MomoUpdates) {
     info!("Generic callback processing started");
     info!("Callback type: {:?}", update.update_type);

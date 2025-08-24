@@ -244,6 +244,219 @@ pub enum CallbackResponse {
         #[serde(rename = "errorReason")]
         error_reason: Reason,
     },
+
+    // disbursement deposit v1 success callback response
+    DisbursementDepositV1Success {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        amount: String,
+        currency: String,
+        payee: Party,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        status: String,
+    },
+
+    // disbursement deposit v1 failed callback response
+    DisbursementDepositV1Failed {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        amount: String,
+        currency: String,
+        payee: Party,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        status: String,
+        reason: Reason,
+    },
+
+    // disbursement deposit v2 success callback response
+    DisbursementDepositV2Success {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        amount: String,
+        currency: String,
+        payee: Party,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        status: String,
+    },
+
+    // disbursement deposit v2 failed callback response
+    DisbursementDepositV2Failed {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        amount: String,
+        currency: String,
+        payee: Party,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        status: String,
+        reason: Reason,
+    },
+
+    // disbursement refund v1 success callback response
+    DisbursementRefundV1Success {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        amount: String,
+        currency: String,
+        payee: Party,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        status: String,
+    },
+
+    // disbursement refund v1 failed callback response
+    DisbursementRefundV1Failed {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        amount: String,
+        currency: String,
+        payee: Party,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        status: String,
+        reason: Reason,
+    },
+
+    // disbursement refund v2 success callback response
+    DisbursementRefundV2Success {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        amount: String,
+        currency: String,
+        payee: Party,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        status: String,
+    },
+
+    // disbursement refund v2 failed callback response
+    DisbursementRefundV2Failed {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        amount: String,
+        currency: String,
+        payee: Party,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        status: String,
+        reason: Reason,
+    },
+
+    // disbursement transfer success callback response
+    DisbursementTransferSuccess {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        amount: String,
+        currency: String,
+        payee: Party,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        status: String,
+    },
+
+    // disbursement transfer failed callback response
+    DisbursementTransferFailed {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        amount: String,
+        currency: String,
+        payee: Party,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        status: String,
+        reason: Reason,
+    },
+
+    // remittance transfer success callback response
+    RemittanceTransferSuccess {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        status: String,
+        reason: String,
+        amount: String,
+        currency: String,
+        payee: Party,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        #[serde(rename = "originatingCountry")]
+        originating_country: String,
+        #[serde(rename = "originalAmount")]
+        original_amount: String,
+        #[serde(rename = "originalCurrency")]
+        original_currency: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+    },
+
+    // remittance transfer failed callback response
+    RemittanceTransferFailed {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        status: String,
+        reason: String,
+        amount: String,
+        currency: String,
+        payee: Party,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        #[serde(rename = "originatingCountry")]
+        originating_country: String,
+        #[serde(rename = "originalAmount")]
+        original_amount: String,
+        #[serde(rename = "originalCurrency")]
+        original_currency: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "errorReason")]
+        error_reason: Reason,
+    },
 }
 
 pub struct MomoUpdates {

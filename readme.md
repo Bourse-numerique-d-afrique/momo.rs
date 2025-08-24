@@ -3,7 +3,7 @@
 [![crates.io](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/publish.yml/badge.svg)](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/publish.yml)
 [![Crates.io](https://img.shields.io/crates/v/mtnmomo.svg)](https://crates.io/crates/mtnmomo)
 [![MIT licensed](https://img.shields.io/badge/License-MIT-yellow.svg)](https://choosealicense.com/licenses/mit/)
-[![Docs](https://img.shields.io/badge/docs-yes-brightgreen.svg)](https://docs.rs/mtnmomo/0.1.4/mtnmomo/)
+[![Docs](https://img.shields.io/badge/docs-yes-brightgreen.svg)](https://docs.rs/mtnmomo/0.1.7/mtnmomo/)
 
 <div align="center">
 
@@ -15,7 +15,7 @@
 ### Installation
 ```toml
 [dependencies]
-mtnmomo = "0.1.4"
+mtnmomo = "0.1.7"
 ```
 
 or you can use cargo add
@@ -108,7 +108,7 @@ This library includes an integrated callback server for handling MTN MoMo webhoo
 
 ```toml
 [dependencies]
-mtnmomo = { version = "0.1.4", features = ["callback-server"] }
+mtnmomo = { version = "0.1.7", features = ["callback-server"] }
 ```
 
 #### Basic Callback Server Usage

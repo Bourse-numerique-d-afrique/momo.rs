@@ -42,9 +42,7 @@ impl Authorization {
             let token_response: TokenResponse = serde_json::from_str(&body)?;
             Ok(token_response)
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -90,9 +88,7 @@ impl Authorization {
             let token_response: OAuth2TokenResponse = serde_json::from_str(&body)?;
             Ok(token_response)
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -147,9 +143,7 @@ impl Authorization {
             let token_response: BCAuthorizeResponse = serde_json::from_str(&body)?;
             Ok(token_response)
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 }

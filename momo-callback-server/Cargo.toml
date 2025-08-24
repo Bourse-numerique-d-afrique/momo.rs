@@ -1,6 +1,6 @@
 [package]
 name = "momo-callback-server"
-version = "0.1.0"
+version = "0.1.7"
 edition = "2021"
 authors = ["ONDONDA Prince Merveil @princefr"]
 description = "Standalone TLS-enabled callback server for MTN MoMo payment callbacks"

@@ -210,9 +210,7 @@ impl Remittance {
         if res.status().is_success() {
             Ok(transfer.external_id)
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -247,9 +245,7 @@ impl Remittance {
             let cash_transfer_result: CashTransferResult = serde_json::from_str(&body)?;
             Ok(cash_transfer_result)
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -284,9 +280,7 @@ impl Remittance {
         if res.status().is_success() {
             Ok(TranserId::new(transfer.external_id))
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 
@@ -323,9 +317,7 @@ impl Remittance {
             let transfer_result: TransferResult = serde_json::from_str(&body)?;
             Ok(transfer_result)
         } else {
-            Err(Box::new(std::io::Error::other(
-                res.text().await?,
-            )))
+            Err(Box::new(std::io::Error::other(res.text().await?)))
         }
     }
 

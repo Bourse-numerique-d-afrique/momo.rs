@@ -164,9 +164,7 @@ async fn load_tls_config(config: &CallbackServerConfig) -> Result<RustlsConfig, 
     let cert_data = std::fs::read(&config.cert_path)?;
     let key_data = std::fs::read(&config.key_path)?;
 
-    let tls_config = RustlsConfig::new()
-        .cert(cert_data)
-        .key(key_data);
+    let tls_config = RustlsConfig::new().cert(cert_data).key(key_data);
 
     info!("TLS configuration loaded successfully");
     Ok(tls_config)
