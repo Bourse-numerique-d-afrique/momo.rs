@@ -1,21 +1,8 @@
-use futures_core::Stream;
-use std::error::Error;
-use tokio::sync::mpsc::{self, Sender};
-
 use crate::enums::{reason::RequestToPayReason, request_to_pay_status::RequestToPayStatus};
-use poem::{
-    error::ReadBodyError,
-    listener::TcpListener,
-    middleware::AddData,
-    post,
-    web::{Data, Path},
-    EndpointExt,
-};
+use poem::error::ReadBodyError;
 use serde::{Deserialize, Serialize};
 
-use crate::{CallbackType, Party};
-use poem::Result;
-use poem::{handler, Route, Server};
+use crate::Party;
 
 #[derive(thiserror::Error, Debug)]
 #[allow(dead_code)]
@@ -46,22 +33,6 @@ pub struct Reason {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum CallbackResponse {
-    // Request to pay success callback response
-    RequestToPaySuccess {
-        #[serde(rename = "financialTransactionId")]
-        financial_transaction_id: String,
-        #[serde(rename = "externalId")]
-        external_id: String,
-        amount: String,
-        currency: String,
-        payer: Party,
-        #[serde(rename = "payeeNote")]
-        payee_note: Option<String>,
-        #[serde(rename = "payerMessage")]
-        payer_message: Option<String>,
-        status: RequestToPayStatus,
-    },
-
     // Request to pay failed callback response
     RequestToPayFailed {
         #[serde(rename = "financialTransactionId")]
@@ -79,14 +50,20 @@ pub enum CallbackResponse {
         reason: RequestToPayReason,
     },
 
-    // pre approval success callback response
-    PreApprovalSuccess {
+    // Request to pay success callback response
+    RequestToPaySuccess {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        amount: String,
+        currency: String,
         payer: Party,
-        #[serde(rename = "payerCurrency")]
-        payer_currency: String,
-        status: String,
-        #[serde(rename = "expirationDateTime")]
-        expiration_date_time: String,
+        #[serde(rename = "payeeNote")]
+        payee_note: Option<String>,
+        #[serde(rename = "payerMessage")]
+        payer_message: Option<String>,
+        status: RequestToPayStatus,
     },
 
     // pre approval failed callback response
@@ -100,13 +77,14 @@ pub enum CallbackResponse {
         reason: Reason,
     },
 
-    // payment succeded callback response
-    PaymentSucceeded {
-        #[serde(rename = "referenceId")]
-        reference_id: String,
+    // pre approval success callback response
+    PreApprovalSuccess {
+        payer: Party,
+        #[serde(rename = "payerCurrency")]
+        payer_currency: String,
         status: String,
-        #[serde(rename = "financialTransactionId")]
-        financial_transaction_id: Option<String>,
+        #[serde(rename = "expirationDateTime")]
+        expiration_date_time: String,
     },
 
     // paymen failed callback response
@@ -119,24 +97,13 @@ pub enum CallbackResponse {
         reason: Reason,
     },
 
-    // invoice succeeded callback response
-    InvoiceSucceeded {
+    // payment succeded callback response
+    PaymentSucceeded {
         #[serde(rename = "referenceId")]
         reference_id: String,
-        #[serde(rename = "externalId")]
-        external_id: String,
-        amount: String,
-        currency: String,
         status: String,
-        #[serde(rename = "paymentReference")]
-        payment_reference: String,
-        #[serde(rename = "invoiceId")]
-        invoice_id: String,
-        #[serde(rename = "expiryDateTime")]
-        expiry_date_time: String,
-        #[serde(rename = "intendedPayer")]
-        intended_payer: Party,
-        description: String,
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: Option<String>,
     },
 
     // invoice failed callback response
@@ -161,45 +128,24 @@ pub enum CallbackResponse {
         error_reason: Reason,
     },
 
-    // cash transfer succeeded callback response
-    CashTransferSucceeded {
-        #[serde(rename = "financialTransactionId")]
-        financial_transaction_id: String,
-        status: String,
-        reason: String,
-        amount: String,
-        currency: String,
-        payee: Party,
+    // invoice succeeded callback response
+    InvoiceSucceeded {
+        #[serde(rename = "referenceId")]
+        reference_id: String,
         #[serde(rename = "externalId")]
         external_id: String,
-        #[serde(rename = "originatingCountry")]
-        originating_country: String,
-        #[serde(rename = "originalAmount")]
-        original_amount: String,
-        #[serde(rename = "originalCurrency")]
-        original_currency: String,
-        #[serde(rename = "payerMessage")]
-        payer_message: String,
-        #[serde(rename = "payeeNote")]
-        payee_note: String,
-        #[serde(rename = "payerIdentificationType")]
-        payer_identification_type: String,
-        #[serde(rename = "payerIdentificationNumber")]
-        payer_identification_number: String,
-        #[serde(rename = "payerIdentity")]
-        payer_identity: String,
-        #[serde(rename = "payerFirstName")]
-        payer_first_name: String,
-        #[serde(rename = "payerSurname")]
-        payer_surname: String,
-        #[serde(rename = "payerLanguageCode")]
-        payer_language_code: String,
-        #[serde(rename = "payerEmail")]
-        payer_email: String,
-        #[serde(rename = "payerMsisdn")]
-        payer_msisdn: String,
-        #[serde(rename = "payerGender")]
-        payer_gender: String,
+        amount: String,
+        currency: String,
+        status: String,
+        #[serde(rename = "paymentReference")]
+        payment_reference: String,
+        #[serde(rename = "invoiceId")]
+        invoice_id: String,
+        #[serde(rename = "expiryDateTime")]
+        expiry_date_time: String,
+        #[serde(rename = "intendedPayer")]
+        intended_payer: Party,
+        description: String,
     },
 
     // cash trasnfer failed callaback response
@@ -246,20 +192,45 @@ pub enum CallbackResponse {
         error_reason: Reason,
     },
 
-    // disbursement deposit v1 success callback response
-    DisbursementDepositV1Success {
+    // cash transfer succeeded callback response
+    CashTransferSucceeded {
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: String,
-        #[serde(rename = "externalId")]
-        external_id: String,
+        status: String,
+        reason: String,
         amount: String,
         currency: String,
         payee: Party,
-        #[serde(rename = "payeeNote")]
-        payee_note: Option<String>,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        #[serde(rename = "originatingCountry")]
+        originating_country: String,
+        #[serde(rename = "originalAmount")]
+        original_amount: String,
+        #[serde(rename = "originalCurrency")]
+        original_currency: String,
         #[serde(rename = "payerMessage")]
-        payer_message: Option<String>,
-        status: String,
+        payer_message: String,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
+        #[serde(rename = "payerIdentificationType")]
+        payer_identification_type: String,
+        #[serde(rename = "payerIdentificationNumber")]
+        payer_identification_number: String,
+        #[serde(rename = "payerIdentity")]
+        payer_identity: String,
+        #[serde(rename = "payerFirstName")]
+        payer_first_name: String,
+        #[serde(rename = "payerSurname")]
+        payer_surname: String,
+        #[serde(rename = "payerLanguageCode")]
+        payer_language_code: String,
+        #[serde(rename = "payerEmail")]
+        payer_email: String,
+        #[serde(rename = "payerMsisdn")]
+        payer_msisdn: String,
+        #[serde(rename = "payerGender")]
+        payer_gender: String,
     },
 
     // disbursement deposit v1 failed callback response
@@ -279,8 +250,8 @@ pub enum CallbackResponse {
         reason: Reason,
     },
 
-    // disbursement deposit v2 success callback response
-    DisbursementDepositV2Success {
+    // disbursement deposit v1 success callback response
+    DisbursementDepositV1Success {
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: String,
         #[serde(rename = "externalId")]
@@ -312,8 +283,8 @@ pub enum CallbackResponse {
         reason: Reason,
     },
 
-    // disbursement refund v1 success callback response
-    DisbursementRefundV1Success {
+    // disbursement deposit v2 success callback response
+    DisbursementDepositV2Success {
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: String,
         #[serde(rename = "externalId")]
@@ -345,8 +316,8 @@ pub enum CallbackResponse {
         reason: Reason,
     },
 
-    // disbursement refund v2 success callback response
-    DisbursementRefundV2Success {
+    // disbursement refund v1 success callback response
+    DisbursementRefundV1Success {
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: String,
         #[serde(rename = "externalId")]
@@ -378,8 +349,8 @@ pub enum CallbackResponse {
         reason: Reason,
     },
 
-    // disbursement transfer success callback response
-    DisbursementTransferSuccess {
+    // disbursement refund v2 success callback response
+    DisbursementRefundV2Success {
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: String,
         #[serde(rename = "externalId")]
@@ -411,27 +382,20 @@ pub enum CallbackResponse {
         reason: Reason,
     },
 
-    // remittance transfer success callback response
-    RemittanceTransferSuccess {
+    // disbursement transfer success callback response
+    DisbursementTransferSuccess {
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: String,
-        status: String,
-        reason: String,
+        #[serde(rename = "externalId")]
+        external_id: String,
         amount: String,
         currency: String,
         payee: Party,
-        #[serde(rename = "externalId")]
-        external_id: String,
-        #[serde(rename = "originatingCountry")]
-        originating_country: String,
-        #[serde(rename = "originalAmount")]
-        original_amount: String,
-        #[serde(rename = "originalCurrency")]
-        original_currency: String,
-        #[serde(rename = "payerMessage")]
-        payer_message: String,
         #[serde(rename = "payeeNote")]
-        payee_note: String,
+        payee_note: Option<String>,
+        #[serde(rename = "payerMessage")]
+        payer_message: Option<String>,
+        status: String,
     },
 
     // remittance transfer failed callback response
@@ -457,6 +421,29 @@ pub enum CallbackResponse {
         payee_note: String,
         #[serde(rename = "errorReason")]
         error_reason: Reason,
+    },
+
+    // remittance transfer success callback response
+    RemittanceTransferSuccess {
+        #[serde(rename = "financialTransactionId")]
+        financial_transaction_id: String,
+        status: String,
+        reason: String,
+        amount: String,
+        currency: String,
+        payee: Party,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        #[serde(rename = "originatingCountry")]
+        originating_country: String,
+        #[serde(rename = "originalAmount")]
+        original_amount: String,
+        #[serde(rename = "originalCurrency")]
+        original_currency: String,
+        #[serde(rename = "payerMessage")]
+        payer_message: String,
+        #[serde(rename = "payeeNote")]
+        payee_note: String,
     },
 }
 
