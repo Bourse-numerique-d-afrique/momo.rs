@@ -3,7 +3,7 @@ mod common;
 #[cfg(test)]
 mod tests {
     use crate::common::CallbackTestHelper;
-    use mtnmomo::{enums::request_to_pay_status::RequestToPayStatus, Currency, Momo, Party, PartyIdType, RequestToPay};
+    use mtnmomo::{enums::{reason::RequestToPayReason, request_to_pay_status::RequestToPayStatus}, Currency, Momo, Party, PartyIdType, RequestToPay};
     use std::env;
     use tokio::sync::OnceCell;
     use futures_util::StreamExt;
@@ -107,6 +107,8 @@ mod tests {
             env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
         let collection = momo.collection(primary_key, secondary_key);
 
+        let mut d = CallbackTestHelper::new().await.expect("Failed to start callback listener");
+
         let payer: Party = Party {
             party_id_type: PartyIdType::MSISDN,
             party_id: "46733123451".to_string(),
@@ -124,13 +126,39 @@ mod tests {
 
         let request_to_pay_result = collection
             .request_to_pay(
-                request,
+                request.clone(),
                 Some(&call_back_server_url),
             )
             .await;
 
-        // Request should succeed initially (returns 202) even for test numbers that will eventually fail
         assert!(request_to_pay_result.is_ok());
+
+        if let Some(callback) = d.next().await {
+            if let mtnmomo::CallbackResponse::RequestToPayFailed {
+                financial_transaction_id,
+                external_id,
+                amount,
+                currency,
+                payer,
+                payee_note,
+                payer_message: _, // ignore if not needed
+                status,
+                reason
+            } = callback.response
+            {
+                assert_eq!(external_id, request.external_id);
+                assert_eq!(amount, request.amount);
+                assert_eq!(currency, request.currency.to_string());
+                assert_eq!(payer.party_id, request.payer.party_id);
+                assert_eq!(payee_note, Some(request.payee_note));
+                assert_eq!(status, RequestToPayStatus::FAILED);
+                assert_eq!(reason, RequestToPayReason::APPROVALREJECTED);
+                assert!(!financial_transaction_id.unwrap().is_empty());
+
+            } else {
+                panic!("Expected RequestToPayRejected callback, got {:?}", callback.response);
+            }
+        }
     }
 
     #[tokio::test]
@@ -140,6 +168,8 @@ mod tests {
         let secondary_key =
             env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
         let collection = momo.collection(primary_key, secondary_key);
+
+        let mut d = CallbackTestHelper::new().await.expect("Failed to start callback listener");
 
         let payer: Party = Party {
             party_id_type: PartyIdType::MSISDN,
@@ -158,13 +188,40 @@ mod tests {
 
         let request_to_pay_result = collection
             .request_to_pay(
-                request,
+                request.clone(),
                 Some(&call_back_server_url),
             )
             .await;
 
         // Request should succeed initially (returns 202) even for test numbers that will eventually fail
         assert!(request_to_pay_result.is_ok());
+
+        if let Some(callback) = d.next().await {
+            if let mtnmomo::CallbackResponse::RequestToPayFailed {
+                financial_transaction_id,
+                external_id,
+                amount,
+                currency,
+                payer,
+                payee_note,
+                payer_message: _, // ignore if not needed
+                status,
+                reason
+            } = callback.response
+            {
+                assert_eq!(external_id, request.external_id);
+                assert_eq!(amount, request.amount);
+                assert_eq!(currency, request.currency.to_string());
+                assert_eq!(payer.party_id, request.payer.party_id);
+                assert_eq!(payee_note, Some(request.payee_note));
+                assert_eq!(status, RequestToPayStatus::FAILED);
+                assert_eq!(reason, RequestToPayReason::EXPIRED);
+                assert!(!financial_transaction_id.unwrap().is_empty());
+
+            } else {
+                panic!("Expected RequestToPayFailed callback, got {:?}", callback.response);
+            }
+        }
     }
 
     #[tokio::test]
@@ -174,6 +231,8 @@ mod tests {
         let secondary_key =
             env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
         let collection = momo.collection(primary_key, secondary_key);
+
+        let mut d = CallbackTestHelper::new().await.expect("Failed to start callback listener");
 
         let payer: Party = Party {
             party_id_type: PartyIdType::MSISDN,
@@ -192,13 +251,41 @@ mod tests {
 
         let request_to_pay_result = collection
             .request_to_pay(
-                request,
+                request.clone(),
                 Some(&call_back_server_url),
             )
             .await;
 
         // Request should succeed initially (returns 202) even for test numbers that will eventually fail
         assert!(request_to_pay_result.is_ok());
+
+
+        if let Some(callback) = d.next().await {
+            if let mtnmomo::CallbackResponse::RequestToPayFailed {
+                financial_transaction_id,
+                external_id,
+                amount,
+                currency,
+                payer,
+                payee_note,
+                payer_message: _, // ignore if not needed
+                status,
+                reason
+            } = callback.response
+            {
+                assert_eq!(external_id, request.external_id);
+                assert_eq!(amount, request.amount);
+                assert_eq!(currency, request.currency.to_string());
+                assert_eq!(payer.party_id, request.payer.party_id);
+                assert_eq!(payee_note, Some(request.payee_note));
+                assert_eq!(status, RequestToPayStatus::FAILED);
+                assert_eq!(reason, RequestToPayReason::ONGOING);
+                assert!(!financial_transaction_id.unwrap().is_empty());
+
+            } else {
+                panic!("Expected RequestToPayFailed callback, got {:?}", callback.response);
+            }
+        }
     }
 
     #[tokio::test]
@@ -208,6 +295,8 @@ mod tests {
         let secondary_key =
             env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
         let collection = momo.collection(primary_key, secondary_key);
+
+        let mut d = CallbackTestHelper::new().await.expect("Failed to start callback listener");
 
         let payer: Party = Party {
             party_id_type: PartyIdType::MSISDN,
@@ -226,13 +315,40 @@ mod tests {
 
         let request_to_pay_result = collection
             .request_to_pay(
-                request,
+                request.clone(),
                 Some(&call_back_server_url),
             )
             .await;
 
         // Request should succeed initially (returns 202) even for test numbers that will eventually fail
         assert!(request_to_pay_result.is_ok());
+
+        if let Some(callback) = d.next().await {
+            if let mtnmomo::CallbackResponse::RequestToPayFailed {
+                financial_transaction_id,
+                external_id,
+                amount,
+                currency,
+                payer,
+                payee_note,
+                payer_message: _, // ignore if not needed
+                status,
+                reason
+            } = callback.response
+            {
+                assert_eq!(external_id, request.external_id);
+                assert_eq!(amount, request.amount);
+                assert_eq!(currency, request.currency.to_string());
+                assert_eq!(payer.party_id, request.payer.party_id);
+                assert_eq!(payee_note, Some(request.payee_note));
+                assert_eq!(status, RequestToPayStatus::FAILED);
+                assert_eq!(reason, RequestToPayReason::PAYERDELAYED);
+                assert!(!financial_transaction_id.unwrap().is_empty());
+
+            } else {
+                panic!("Expected RequestToPayFailed callback, got {:?}", callback.response);
+            }
+        }
     }
 
     #[tokio::test]
@@ -242,6 +358,7 @@ mod tests {
         let secondary_key =
             env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
         let collection = momo.collection(primary_key, secondary_key);
+        let mut d = CallbackTestHelper::new().await.expect("Failed to start callback listener");
 
         let payer: Party = Party {
             party_id_type: PartyIdType::MSISDN,
@@ -262,6 +379,7 @@ mod tests {
             .await
             .expect("Error requesting to withdraw");
         assert_ne!(res.as_str().len(), 0);
+
     }
 
     #[tokio::test]
