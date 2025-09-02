@@ -4,7 +4,7 @@ use reqwest::Body;
 #[doc(hidden)]
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Refund {
     pub amount: String,
     pub currency: String,

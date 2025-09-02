@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::structs::party::Party;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PreApproval {
     pub payer: Party,
     #[serde(rename = "payerCurrency")]
