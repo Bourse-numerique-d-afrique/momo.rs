@@ -9,16 +9,12 @@
 //!
 //!
 
-use std::sync::Arc;
-
 use crate::{
+    common::{http_client::MomoHttpClient, token_manager::ProductType},
     BCAuthorizeResponse, Balance, BasicUserInfoJsonResponse, CashTransferRequest,
     CashTransferResult, Currency, Environment, OAuth2TokenResponse, TokenResponse, TranserId,
     TransferRequest, TransferResult,
 };
-use chrono::Utc;
-use once_cell::sync::Lazy;
-use tokio::sync::Mutex;
 
 use super::account::Account;
 
@@ -30,10 +26,8 @@ pub struct Remittance {
     pub api_user: String,
     pub api_key: String,
     account: Account,
+    http_client: MomoHttpClient,
 }
-
-static ACCESS_TOKEN: Lazy<Arc<Mutex<Option<TokenResponse>>>> =
-    Lazy::new(|| Arc::new(Mutex::new(None)));
 
 impl Remittance {
     /// Create a new instance of Remittance product
@@ -60,6 +54,14 @@ impl Remittance {
         secondary_key: String,
     ) -> Remittance {
         let account = Account {};
+        let http_client = MomoHttpClient::new(
+            url.clone(),
+            ProductType::Remittance,
+            environment,
+            api_user.clone(),
+            api_key.clone(),
+            primary_key.clone(),
+        );
         Remittance {
             url,
             primary_key,
@@ -68,29 +70,10 @@ impl Remittance {
             api_user,
             api_key,
             account,
+            http_client,
         }
     }
 
-    /// This operation is used to create an access token
-    ///
-    /// # Returns
-    ///
-    /// * 'TokenResponse'
-    async fn create_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
-        let url = format!("{}/{}", self.url, "remittance");
-        let auth = crate::products::auth::Authorization {};
-        let token = auth
-            .create_access_token(
-                url,
-                self.api_user.clone(),
-                self.api_key.clone(),
-                self.primary_key.clone(),
-            )
-            .await?;
-        let mut token_ = ACCESS_TOKEN.lock().await;
-        *token_ = Some(token.clone());
-        Ok(token)
-    }
 
     /// This operation is used to create an OAuth2 token
     ///
@@ -137,7 +120,7 @@ impl Remittance {
     ) -> Result<BCAuthorizeResponse, Box<dyn std::error::Error>> {
         let url = format!("{}/{}", self.url, "remittance");
         let auth = crate::products::auth::Authorization {};
-        let access_token: TokenResponse = self.create_access_token().await?;
+        let access_token: TokenResponse = self.http_client.get_or_create_token().await?;
         auth.bc_authorize(
             url,
             self.environment,
@@ -149,29 +132,6 @@ impl Remittance {
         .await
     }
 
-    /// This operation is used to get the latest access token from the database
-    ///
-    /// # Returns
-    /// * 'TokenResponse'
-    async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
-        let token = ACCESS_TOKEN.lock().await;
-        if token.is_some() {
-            let token = token.clone().unwrap();
-            if token.created_at.is_some() {
-                let created_at = token.created_at.unwrap();
-                let expires_in = token.expires_in;
-                let now = Utc::now();
-                let duration = now.signed_duration_since(created_at);
-                if duration.num_seconds() < expires_in as i64 {
-                    return Ok(token);
-                }
-                let token: TokenResponse = self.create_access_token().await?;
-                return Ok(token);
-            }
-        }
-        let token: TokenResponse = self.create_access_token().await?;
-        Ok(token)
-    }
 
     /// Cash transfer operation is used to transfer an amount from the owner’s account to a payee account.
     /// Status of the transaction can be validated by using GET /cashtransfer/{referenceId}
@@ -189,7 +149,7 @@ impl Remittance {
         callback_url: Option<&str>,
     ) -> Result<String, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let mut req = client
             .post(format!("{}/remittance/v2_0/cashtransfer", self.url))
             .bearer_auth(access_token.access_token)
@@ -201,7 +161,7 @@ impl Remittance {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", callback_url);
+                req = req.header("X-Callback-Url", format!("{}/remittance_cash_transfer", callback_url));
             }
         }
 
@@ -228,7 +188,7 @@ impl Remittance {
         transfer_id: &str,
     ) -> Result<CashTransferResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let res = client
             .get(format!(
                 "{}/remittance/v2_0/cashtransfer/{}",
@@ -263,19 +223,26 @@ impl Remittance {
     pub async fn transfer(
         &self,
         transfer: TransferRequest,
+        callback_url: Option<&str>,
     ) -> Result<TranserId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
-        let res = client
+        let access_token = self.http_client.get_or_create_token().await?;
+        let mut req = client
             .post(format!("{}/remittance/v1_0/transfer", self.url))
             .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
             .header("X-Reference-Id", &transfer.external_id)
             .header("Cache-Control", "no-cache")
             .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-            .body(transfer.clone())
-            .send()
-            .await?;
+            .body(transfer.clone());
+
+        if let Some(callback_url) = callback_url {
+            if !callback_url.is_empty() {
+                req = req.header("X-Callback-Url", format!("{}/remittance_transfer", callback_url));
+            }
+        }
+
+        let res = req.send().await?;
 
         if res.status().is_success() {
             Ok(TranserId::new(transfer.external_id))
@@ -299,7 +266,7 @@ impl Remittance {
         transfer_id: &str,
     ) -> Result<TransferResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let res = client
             .get(format!(
                 "{}/remittance/v1_0/transfer/{}",
@@ -327,7 +294,7 @@ impl Remittance {
     /// * 'Balance', the balance
     pub async fn get_account_balance(&self) -> Result<Balance, Box<dyn std::error::Error>> {
         let url = format!("{}/remittance", self.url);
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         self.account
             .get_account_balance(
                 url,
@@ -351,7 +318,7 @@ impl Remittance {
         currency: Currency,
     ) -> Result<Balance, Box<dyn std::error::Error>> {
         let url = format!("{}/remittance", self.url);
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         self.account
             .get_account_balance_in_specific_currency(
                 url,
@@ -376,7 +343,7 @@ impl Remittance {
         account_holder_msisdn: &str,
     ) -> Result<BasicUserInfoJsonResponse, Box<dyn std::error::Error>> {
         let url = format!("{}/remittance", self.url);
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         self.account
             .get_basic_user_info(
                 url,
@@ -429,7 +396,7 @@ impl Remittance {
         account_holder_type: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let url = format!("{}/remittance", self.url);
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         self.account
             .validate_account_holder_status(
                 url,
@@ -513,7 +480,7 @@ mod tests {
             "payee_note".to_string(),
         );
 
-        let transer_result = remittance.transfer(transfer.clone()).await;
+        let transer_result = remittance.transfer(transfer.clone(), None).await;
         assert!(transer_result.is_ok());
         assert_eq!(transer_result.unwrap().as_string(), transfer.external_id);
     }
@@ -546,7 +513,7 @@ mod tests {
             "payer_message".to_string(),
             "payee_note".to_string(),
         );
-        let transfer_result = remittance.transfer(transfer.clone()).await;
+        let transfer_result = remittance.transfer(transfer.clone(), None).await;
         assert!(transfer_result.is_ok());
 
         let status_result = remittance

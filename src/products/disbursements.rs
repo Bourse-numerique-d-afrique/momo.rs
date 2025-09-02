@@ -9,9 +9,8 @@
 //!
 //!
 
-use std::sync::Arc;
-
 use crate::{
+    common::{http_client::MomoHttpClient, token_manager::ProductType},
     responses::{
         refund_result::RefundResult, token_response::TokenResponse, transfer_result::TransferResult,
     },
@@ -20,9 +19,6 @@ use crate::{
 };
 
 use super::account::Account;
-use chrono::Utc;
-use once_cell::sync::Lazy;
-use tokio::sync::Mutex;
 
 pub struct Disbursements {
     pub url: String,
@@ -32,10 +28,8 @@ pub struct Disbursements {
     pub api_user: String,
     pub api_key: String,
     account: Account,
+    http_client: MomoHttpClient,
 }
-
-static ACCESS_TOKEN: Lazy<Arc<Mutex<Option<TokenResponse>>>> =
-    Lazy::new(|| Arc::new(Mutex::new(None)));
 
 impl Disbursements {
     /*
@@ -53,6 +47,14 @@ impl Disbursements {
         secondary_key: String,
     ) -> Disbursements {
         let account = Account {};
+        let http_client = MomoHttpClient::new(
+            url.clone(),
+            ProductType::Disbursement,
+            environment,
+            api_user.clone(),
+            api_key.clone(),
+            primary_key.clone(),
+        );
         Disbursements {
             url,
             primary_key,
@@ -61,6 +63,7 @@ impl Disbursements {
             api_key,
             api_user,
             account,
+            http_client,
         }
     }
 
@@ -80,8 +83,6 @@ impl Disbursements {
                 self.primary_key.clone(),
             )
             .await?;
-        let mut token_ = ACCESS_TOKEN.lock().await;
-        *token_ = Some(token.clone());
         Ok(token)
     }
 
@@ -142,29 +143,6 @@ impl Disbursements {
         .await
     }
 
-    /// This operation is used to get the latest access token from the database
-    ///
-    /// # Returns
-    /// * 'TokenResponse'
-    async fn get_valid_access_token(&self) -> Result<TokenResponse, Box<dyn std::error::Error>> {
-        let token = ACCESS_TOKEN.lock().await;
-        if token.is_some() {
-            let token = token.clone().unwrap();
-            if token.created_at.is_some() {
-                let created_at = token.created_at.unwrap();
-                let expires_in = token.expires_in;
-                let now = Utc::now();
-                let duration = now.signed_duration_since(created_at);
-                if duration.num_seconds() < expires_in as i64 {
-                    return Ok(token);
-                }
-                let token: TokenResponse = self.create_access_token().await?;
-                return Ok(token);
-            }
-        }
-        let token: TokenResponse = self.create_access_token().await?;
-        Ok(token)
-    }
 
     /// Deposit operation is used to deposit an amount from the owner’s account to a payee account.
     /// Status of the transaction can be validated by using the GET /deposit/{referenceId}
@@ -182,7 +160,7 @@ impl Disbursements {
         callback_url: Option<&str>,
     ) -> Result<DepositId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let mut req = client
             .post(format!("{}/disbursement/v1_0/deposit", self.url))
             .bearer_auth(access_token.access_token)
@@ -195,7 +173,7 @@ impl Disbursements {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", callback_url);
+                req = req.header("X-Callback-Url", format!("{}/disbursement_deposit_v1", callback_url));
             }
         }
 
@@ -224,7 +202,7 @@ impl Disbursements {
         callback_url: Option<&str>,
     ) -> Result<DepositId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let mut req = client
             .post(format!("{}/disbursement/v2_0/deposit", self.url))
             .bearer_auth(access_token.access_token)
@@ -237,7 +215,7 @@ impl Disbursements {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", callback_url);
+                req = req.header("X-Callback-Url", format!("{}/disbursement_deposit_v2", callback_url));
             }
         }
 
@@ -265,7 +243,7 @@ impl Disbursements {
         deposit_id: String,
     ) -> Result<TransferResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let res = client
             .get(format!(
                 "{}/disbursement/v1_0/deposit/{}",
@@ -302,7 +280,7 @@ impl Disbursements {
         reference_id: &str,
     ) -> Result<RefundResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let res = client
             .get(format!(
                 "{}/disbursement/v1_0/refund/{}",
@@ -339,7 +317,7 @@ impl Disbursements {
         transfer_id: &str,
     ) -> Result<TransferResult, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let res = client
             .get(format!(
                 "{}/disbursement/v1_0/transfer/{}",
@@ -379,7 +357,7 @@ impl Disbursements {
     ) -> Result<RefundId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let refund_id = uuid::Uuid::new_v4().to_string();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let mut req = client
             .post(format!("{}/disbursement/v1_0/refund", self.url))
             .bearer_auth(access_token.access_token)
@@ -391,7 +369,7 @@ impl Disbursements {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", callback_url);
+                req = req.header("X-Callback-Url", format!("{}/disbursement_refund_v1", callback_url));
             }
         }
 
@@ -422,7 +400,7 @@ impl Disbursements {
     ) -> Result<RefundId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let refund_id = uuid::Uuid::new_v4().to_string();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let mut req = client
             .post(format!("{}/disbursement/v2_0/refund", self.url))
             .bearer_auth(access_token.access_token)
@@ -434,7 +412,7 @@ impl Disbursements {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", callback_url);
+                req = req.header("X-Callback-Url", format!("{}/disbursement_refund_v2", callback_url));
             }
         }
 
@@ -463,10 +441,11 @@ impl Disbursements {
         callback_url: Option<&str>,
     ) -> Result<TranserId, Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         let mut req = client
             .post(format!("{}/disbursement/v1_0/transfer", self.url))
             .bearer_auth(access_token.access_token)
+            .header("Content-Type", "application/json")
             .header("X-Target-Environment", self.environment.to_string())
             .header("X-Reference-Id", &transfer.external_id)
             .header("Cache-Control", "no-cache")
@@ -475,7 +454,7 @@ impl Disbursements {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", callback_url);
+                req = req.header("X-Callback-Url", format!("{}/disbursement_transfer", callback_url));
             }
         }
 
@@ -494,7 +473,7 @@ impl Disbursements {
     /// * 'Balance', the balance
     pub async fn get_account_balance(&self) -> Result<Balance, Box<dyn std::error::Error>> {
         let url = format!("{}/disbursement", self.url);
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         self.account
             .get_account_balance(
                 url,
@@ -518,7 +497,7 @@ impl Disbursements {
         currency: Currency,
     ) -> Result<Balance, Box<dyn std::error::Error>> {
         let url = format!("{}/disbursement", self.url);
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         self.account
             .get_account_balance_in_specific_currency(
                 url,
@@ -543,7 +522,7 @@ impl Disbursements {
         account_holder_msisdn: &str,
     ) -> Result<BasicUserInfoJsonResponse, Box<dyn std::error::Error>> {
         let url = format!("{}/disbursement", self.url);
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         self.account
             .get_basic_user_info(
                 url,
@@ -596,7 +575,7 @@ impl Disbursements {
         account_holder_type: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let url = format!("{}/disbursement", self.url);
-        let access_token = self.get_valid_access_token().await?;
+        let access_token = self.http_client.get_or_create_token().await?;
         self.account
             .validate_account_holder_status(
                 url,

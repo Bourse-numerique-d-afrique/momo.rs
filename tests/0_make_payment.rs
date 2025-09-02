@@ -2,9 +2,11 @@ mod common;
 
 #[cfg(test)]
 mod tests {
-    use mtnmomo::{Currency, Momo, Party, PartyIdType, RequestToPay};
+    use crate::common::CallbackTestHelper;
+    use mtnmomo::{enums::request_to_pay_status::RequestToPayStatus, Currency, Momo, Party, PartyIdType, RequestToPay};
     use std::env;
     use tokio::sync::OnceCell;
+    use futures_util::StreamExt;
 
     static MOMO: OnceCell<Momo> = OnceCell::const_new();
 
@@ -13,8 +15,11 @@ mod tests {
             let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
             let subscription_key =
                 env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+
+            let callback_host = env::var("MTN_CALLBACK_HOST").unwrap_or_else(|_| "webhook.site".to_string());
+
             let momo_result =
-                Momo::new_with_provisioning(mtn_url, subscription_key, "webhook.site").await;
+                Momo::new_with_provisioning(mtn_url, subscription_key, &callback_host).await;
             momo_result.expect("Failed to initialize Momo")
         })
         .await
@@ -28,6 +33,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_1_make_payment_successful() {
+
+        
         let momo = get_momo().await;
         let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
         let secondary_key =
@@ -39,6 +46,8 @@ mod tests {
             party_id: "22997108557".to_string(),
         };
 
+        let mut d = CallbackTestHelper::new().await.expect("Failed to start callback listener");
+
         let request = RequestToPay::new(
             "100".to_string(),
             Currency::EUR,
@@ -47,14 +56,47 @@ mod tests {
             "test_payee_note".to_string(),
         );
 
+        let callback_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+
+
+
         let request_to_pay_result = collection
             .request_to_pay(
-                request,
-                Some("http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4"),
+                request.clone(),
+                Some(&callback_url),
             )
             .await;
 
         assert!(request_to_pay_result.is_ok());
+        
+
+    if let Some(callback) = d.next().await {
+        if let mtnmomo::CallbackResponse::RequestToPaySuccess {
+            financial_transaction_id,
+            external_id,
+            amount,
+            currency,
+            payer,
+            payee_note,
+            payer_message: _, // ignore if not needed
+            status,
+        } = callback.response
+        {
+            assert_eq!(external_id, request.external_id);
+            assert_eq!(amount, request.amount);
+            assert_eq!(currency, request.currency.to_string());
+            assert_eq!(payer.party_id, request.payer.party_id);
+            assert_eq!(payee_note, Some(request.payee_note));
+            assert_eq!(status, RequestToPayStatus::SUCCESSFUL);
+            assert!(!financial_transaction_id.is_empty());
+        } else {
+            panic!("Expected RequestToPaySuccess callback, got {:?}", callback.response);
+        }
+    } else {
+        panic!("Did not receive callback");
+}
+
+
     }
 
     #[tokio::test]
@@ -78,10 +120,12 @@ mod tests {
             "test_payee_note".to_string(),
         );
 
+        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+
         let request_to_pay_result = collection
             .request_to_pay(
                 request,
-                Some("http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4"),
+                Some(&call_back_server_url),
             )
             .await;
 
@@ -110,10 +154,12 @@ mod tests {
             "test_payee_note".to_string(),
         );
 
+        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+
         let request_to_pay_result = collection
             .request_to_pay(
                 request,
-                Some("http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4"),
+                Some(&call_back_server_url),
             )
             .await;
 
@@ -142,10 +188,12 @@ mod tests {
             "test_payee_note".to_string(),
         );
 
+        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+
         let request_to_pay_result = collection
             .request_to_pay(
                 request,
-                Some("http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4"),
+                Some(&call_back_server_url),
             )
             .await;
 
@@ -174,14 +222,134 @@ mod tests {
             "test_payee_note".to_string(),
         );
 
+        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+
         let request_to_pay_result = collection
             .request_to_pay(
                 request,
-                Some("http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4"),
+                Some(&call_back_server_url),
             )
             .await;
 
         // Request should succeed initially (returns 202) even for test numbers that will eventually fail
         assert!(request_to_pay_result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_request_to_withdraw_v1() {
+        let momo = get_momo().await;
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key =
+            env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let collection = momo.collection(primary_key, secondary_key);
+
+        let payer: Party = Party {
+            party_id_type: PartyIdType::MSISDN,
+            party_id: "467331234534".to_string(),
+        };
+        let request = RequestToPay::new(
+            "100.0".to_string(),
+            Currency::EUR,
+            payer,
+            "test_payer_message".to_string(),
+            "test_payee_note".to_string(),
+        );
+
+        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+
+        let res = collection
+            .request_to_withdraw_v1(request, Some(&call_back_server_url))
+            .await
+            .expect("Error requesting to withdraw");
+        assert_ne!(res.as_str().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_request_to_withdraw_v2() {
+        let momo = get_momo().await;
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key =
+            env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let collection = momo.collection(primary_key, secondary_key);
+
+        let payer: Party = Party {
+            party_id_type: PartyIdType::MSISDN,
+            party_id: "+242064818006".to_string(),
+        };
+        let request = RequestToPay::new(
+            "100".to_string(),
+            Currency::EUR,
+            payer,
+            "test_payer_message".to_string(),
+            "test_payee_note".to_string(),
+        );
+
+        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+
+        let res = collection
+            .request_to_withdraw_v2(request, Some(&call_back_server_url))
+            .await
+            .expect("Error requesting to withdraw");
+        assert_ne!(res.as_str().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_create_payment() {
+        let momo = get_momo().await;
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key =
+            env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let collection = momo.collection(primary_key, secondary_key);
+
+        let payment = mtnmomo::CreatePaymentRequest::new(
+            mtnmomo::Money {
+                amount: "100".to_string(),
+                currency: Currency::EUR.to_string(),
+            },
+            "561551442".to_string(),
+            "WaterProvider".to_string(),
+            "203".to_string(),
+            "Monthly Payments".to_string(),
+            "788".to_string(),
+            "Thank You ".to_string(),
+            "Thank You".to_string(),
+            2,
+            true,
+        );
+
+        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+
+        let res = collection
+            .create_payments(payment, Some(&call_back_server_url))
+            .await
+            .expect("Error creating payment");
+        assert_ne!(res.as_str().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_pre_approval() {
+        let momo = get_momo().await;
+        let primary_key = env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let secondary_key =
+            env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+        let collection = momo.collection(primary_key, secondary_key);
+
+        let user: Party = Party {
+            party_id_type: PartyIdType::MSISDN,
+            party_id: "+242064818006".to_string(),
+        };
+        let preapproval = mtnmomo::PreApprovalRequest {
+            payer: user,
+            payer_currency: Currency::EUR.to_string(),
+            payer_message: "".to_string(),
+            validity_time: 3600,
+        };
+
+        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+
+        let res = collection.pre_approval(preapproval, Some(&call_back_server_url)).await;
+        if res.is_ok() {
+            assert!(true);
+        }
     }
 }

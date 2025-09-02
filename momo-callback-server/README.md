@@ -1,17 +1,15 @@
 # MTN MoMo Callback Server
 
-A standalone TLS-enabled callback server for handling MTN MoMo payment callbacks. This server listens on port 443 with TLS encryption and processes all types of MTN MoMo callbacks including payments, invoices, disbursements, and remittances.
+A standalone HTTP callback server for handling MTN MoMo payment callbacks. This server listens on port 8500 (localhost only) and processes all types of MTN MoMo callbacks including payments, invoices, disbursements, and remittances. TLS is handled by a reverse proxy (e.g., Caddy2) in production.
 
 ## Features
 
-- **🔒 TLS/HTTPS Support**: Secure server listening on port 443 with certificate-based encryption
 - **📡 Complete Callback Coverage**: Handles all MTN MoMo callback types:
   - **Collection**: Request to pay, invoices, withdrawals, pre-approvals
   - **Disbursements**: Deposits, refunds, transfers
   - **Remittances**: Cash transfers, transfers
-- **💊 Health Monitoring**: Built-in `/health` endpoint for uptime checks
+- **-pills Health Monitoring**: Built-in `/health` endpoint for uptime checks
 - **🛡️ Production Ready**: Graceful shutdown, structured logging, comprehensive error handling
-- **⚙️ Environment Configuration**: Configurable certificate paths via environment variables
 - **🔧 Custom Business Logic**: Easy-to-extend callback handlers for your specific needs
 
 ## Quick Start
@@ -19,7 +17,6 @@ A standalone TLS-enabled callback server for handling MTN MoMo payment callbacks
 ### Prerequisites
 
 - Rust 1.70+ installed
-- TLS certificate and private key files in PEM format
 - MTN MoMo API credentials
 
 ### 1. Build the Server
@@ -30,44 +27,24 @@ cd momo-callback-server
 cargo build --release
 ```
 
-### 2. Prepare TLS Certificates
-
-Place your certificate and key files in the current directory:
-- `cert.pem` - Your TLS certificate
-- `key.pem` - Your private key
-
-Or set custom paths via environment variables:
-```bash
-export TLS_CERT_PATH=/path/to/your/cert.pem
-export TLS_KEY_PATH=/path/to/your/key.pem
-```
-
-### 3. Run the Server
+### 2. Run the Server
 
 ```bash
-# Using default certificate paths
+# Run the server
 ./target/release/momo-callback-server
-
-# Or with custom paths
-TLS_CERT_PATH=/path/to/cert.pem TLS_KEY_PATH=/path/to/key.pem ./target/release/momo-callback-server
 ```
 
-### 4. Test the Server
+### 3. Test the Server
 
 ```bash
 # Health check
-curl https://localhost/health
+curl http://127.0.0.1:8500/health
 # Should return: OK
 ```
 
 ## Configuration
 
-The server uses environment variables for configuration:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `TLS_CERT_PATH` | `cert.pem` | Path to TLS certificate file (PEM format) |
-| `TLS_KEY_PATH` | `key.pem` | Path to TLS private key file (PEM format) |
+The server runs on localhost:8500 by default. For production deployments, use a reverse proxy like Caddy2 to handle TLS termination.
 
 ## API Endpoints
 
@@ -79,50 +56,33 @@ The server uses environment variables for configuration:
 All callback endpoints accept POST requests:
 
 #### Collection Callbacks
-- `POST /collection_request_to_pay/{callback_type}`
-- `POST /collection_request_to_withdraw_v1/{callback_type}`
-- `POST /collection_request_to_withdraw_v2/{callback_type}`
-- `POST /collection_invoice/{callback_type}`
-- `POST /collection_payment/{callback_type}`
-- `POST /collection_preapproval/{callback_type}`
+- `POST /collection_request_to_pay`
+- `POST /collection_request_to_withdraw_v1`
+- `POST /collection_request_to_withdraw_v2`
+- `POST /collection_invoice`
+- `POST /collection_payment`
+- `POST /collection_preapproval`
 
 #### Disbursement Callbacks
-- `POST /disbursement_deposit_v1/{callback_type}`
-- `POST /disbursement_deposit_v2/{callback_type}`
-- `POST /disbursement_refund_v1/{callback_type}`
-- `POST /disbursement_refund_v2/{callback_type}`
-- `POST /disbursement_transfer/{callback_type}`
+- `POST /disbursement_deposit_v1`
+- `POST /disbursement_deposit_v2`
+- `POST /disbursement_refund_v1`
+- `POST /disbursement_refund_v2`
+- `POST /disbursement_transfer`
 
 #### Remittance Callbacks
-- `POST /remittance_cash_transfer/{callback_type}`
-- `POST /remittance_transfer/{callback_type}`
-
-### Callback Types
-
-The `{callback_type}` parameter can be:
-- `REQUEST_TO_PAY`
-- `REQUEST_TO_WITHDRAW_V1`
-- `REQUEST_TO_WITHDRAW_V2`
-- `INVOICE`
-- `COLLECTION_PAYMENT`
-- `COLLECTION_PRE_APPROVAL`
-- `DISBURSEMENT_DEPOSIT_V1`
-- `DISBURSEMENT_DEPOSIT_V2`
-- `DISBURSEMENT_REFUND_V1`
-- `DISBURSEMENT_REFUND_V2`
-- `DISBURSEMENT_TRANSFER`
-- `REMITTANCE_CASH_TRANSFER`
-- `REMITTANCE_TRANSFER`
+- `POST /remittance_cash_transfer`
+- `POST /remittance_transfer`
 
 ## Usage with MTN MoMo API
 
-When making requests to the MTN MoMo API, set the callback URL to point to your server:
+When making requests to the MTN MoMo API, set the callback URL to point to your server through the reverse proxy:
 
 ```rust
 use mtnmomo::{Momo, RequestToPay, Party, PartyIdType, Currency};
 
 // Example: Request to pay with callback
-let callback_url = "https://your-domain.com/collection_request_to_pay/REQUEST_TO_PAY";
+let callback_url = "https://your-domain.com/collection_request_to_pay";
 let result = collection.request_to_pay(request, Some(callback_url)).await;
 ```
 
@@ -163,7 +123,7 @@ async fn handle_invoice_callback(update: &MomoUpdates) {
             // Handle successful invoice payment
             // Update invoice status, notify customer, etc.
         }
-        CallbackResponse::InvoiceFailed { external_id, erron_reason, .. } => {
+        CallbackResponse::InvoiceFailed { external_id, error_reason, .. } => {
             // Handle failed invoice
             // Send reminder, update status, etc.
         }
@@ -178,19 +138,16 @@ The server provides comprehensive logging:
 
 ```
 2024-01-15T10:30:15.123Z INFO [momo_callback_server] MTN MoMo Callback Server starting...
-2024-01-15T10:30:15.124Z INFO [momo_callback_server] Loading TLS certificate from: cert.pem
-2024-01-15T10:30:15.125Z INFO [momo_callback_server] Loading TLS private key from: key.pem
-2024-01-15T10:30:15.126Z INFO [momo_callback_server] TLS configuration loaded successfully
-2024-01-15T10:30:15.127Z INFO [momo_callback_server] Host: 0.0.0.0, Port: 443
-2024-01-15T10:30:15.128Z INFO [momo_callback_server] Binding to address: 0.0.0.0:443
+2024-01-15T10:30:15.127Z INFO [momo_callback_server] Host: 127.0.0.1, Port: 8500
+2024-01-15T10:30:15.128Z INFO [momo_callback_server] Binding server to address: 127.0.0.1:8500
 2024-01-15T10:30:15.129Z INFO [momo_callback_server] MTN MoMo Callback Server started successfully
 2024-01-15T10:30:15.130Z INFO [momo_callback_server] Server is running. Press Ctrl+C to stop.
 ```
 
 When callbacks are received:
 ```
-2024-01-15T10:31:20.456Z INFO [momo_callback_server] Received callback from 192.168.1.100: REQUEST_TO_PAY
-2024-01-15T10:31:20.457Z INFO [momo_callback_server] Successfully processed REQUEST_TO_PAY callback
+2024-01-15T10:31:20.456Z INFO [momo_callback_server] Received callback from 192.168.1.100
+2024-01-15T10:31:20.457Z INFO [momo_callback_server] Successfully processed callback
 2024-01-15T10:31:20.458Z INFO [momo_callback_server] Processing callback: RequestToPay
 2024-01-15T10:31:20.459Z INFO [momo_callback_server] Payment successful - External ID: abc123, Amount: 100 UGX
 ```
@@ -208,11 +165,9 @@ COPY . .
 RUN cargo build --release
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=builder /app/target/release/momo-callback-server .
-COPY cert.pem key.pem ./
-EXPOSE 443
+COPY --from=builder /app/target/release/momo-callback-server ./
+EXPOSE 8500
 CMD ["./momo-callback-server"]
 ```
 
@@ -229,8 +184,6 @@ After=network.target
 Type=simple
 User=momo
 WorkingDirectory=/opt/momo-callback-server
-Environment=TLS_CERT_PATH=/opt/momo-callback-server/cert.pem
-Environment=TLS_KEY_PATH=/opt/momo-callback-server/key.pem
 ExecStart=/opt/momo-callback-server/momo-callback-server
 Restart=always
 RestartSec=5
@@ -239,38 +192,19 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-### Reverse Proxy with nginx
+### Reverse Proxy with Caddy2
 
-If you can't bind to port 443 directly:
+Use Caddy2 as a reverse proxy to handle TLS termination:
 
-```nginx
-server {
-    listen 443 ssl;
-    server_name your-domain.com;
-    
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-    
-    location / {
-        proxy_pass http://127.0.0.1:8443;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
+```caddy
+your-domain.com {
+    reverse_proxy 127.0.0.1:8500
 }
-```
-
-Then run the server on port 8443:
-```rust
-// Modify the port in CallbackServerConfig::default()
-port: 8443,
 ```
 
 ## Security
 
-- **TLS 1.2+**: Uses modern TLS encryption for all connections
-- **Certificate Validation**: Validates TLS certificates on startup
+- **Localhost Only**: By default, the server only binds to localhost for security
 - **Request Logging**: All callback requests are logged for audit
 - **JSON Validation**: Validates callback payloads from MTN MoMo
 - **Error Handling**: Failed callbacks are logged with detailed error information
@@ -279,23 +213,11 @@ port: 8443,
 
 ### Common Issues
 
-1. **Certificate not found**
-   ```
-   Certificate file not found: cert.pem
-   ```
-   **Solution**: Ensure your certificate file exists and is readable.
-
-2. **Permission denied on port 443**
+1. **Permission denied on port 8500**
    ```
    Permission denied (os error 13)
    ```
-   **Solution**: Run as root or use `setcap CAP_NET_BIND_SERVICE=+eip ./target/release/momo-callback-server`
-
-3. **TLS handshake failures**
-   ```
-   TLS handshake error
-   ```
-   **Solution**: Verify your certificate and key files are valid and match.
+   **Solution**: Port 8500 is a non-privileged port, so this shouldn't happen. Check your system configuration.
 
 ### Debug Mode
 
@@ -309,7 +231,7 @@ RUST_LOG=debug ./target/release/momo-callback-server
 Use `curl` to test callback endpoints:
 
 ```bash
-curl -X POST https://localhost/collection_request_to_pay/REQUEST_TO_PAY \
+curl -X POST http://127.0.0.1:8500/collection_request_to_pay \
   -H "Content-Type: application/json" \
   -d '{
     "financialTransactionId": "123456",

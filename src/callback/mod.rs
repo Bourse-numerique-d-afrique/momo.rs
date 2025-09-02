@@ -37,13 +37,14 @@ enum CallbackError {
 ///
 /// - 'code', Reason error code
 /// - 'message', Reason message
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Reason {
     pub code: RequestToPayReason,
     pub message: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(untagged)]
 pub enum CallbackResponse {
     // Request to pay success callback response
     RequestToPaySuccess {
@@ -55,27 +56,27 @@ pub enum CallbackResponse {
         currency: String,
         payer: Party,
         #[serde(rename = "payeeNote")]
-        payee_note: String,
+        payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
-        payer_message: String,
+        payer_message: Option<String>,
         status: RequestToPayStatus,
     },
 
     // Request to pay failed callback response
     RequestToPayFailed {
         #[serde(rename = "financialTransactionId")]
-        financial_transaction_id: String,
+        financial_transaction_id: Option<String>,
         #[serde(rename = "externalId")]
         external_id: String,
         amount: String,
         currency: String,
         payer: Party,
         #[serde(rename = "payeeNote")]
-        payee_note: String,
+        payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
-        payer_message: String,
+        payer_message: Option<String>,
         status: RequestToPayStatus,
-        reason: Reason,
+        reason: RequestToPayReason,
     },
 
     // pre approval success callback response
@@ -105,7 +106,7 @@ pub enum CallbackResponse {
         reference_id: String,
         status: String,
         #[serde(rename = "financialTransactionId")]
-        financial_transaction_id: String,
+        financial_transaction_id: Option<String>,
     },
 
     // paymen failed callback response
@@ -114,7 +115,7 @@ pub enum CallbackResponse {
         reference_id: String,
         status: String,
         #[serde(rename = "financialTransactionId")]
-        financial_transaction_id: String,
+        financial_transaction_id: Option<String>,
         reason: Reason,
     },
 
@@ -255,9 +256,9 @@ pub enum CallbackResponse {
         currency: String,
         payee: Party,
         #[serde(rename = "payeeNote")]
-        payee_note: String,
+        payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
-        payer_message: String,
+        payer_message: Option<String>,
         status: String,
     },
 
@@ -271,9 +272,9 @@ pub enum CallbackResponse {
         currency: String,
         payee: Party,
         #[serde(rename = "payeeNote")]
-        payee_note: String,
+        payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
-        payer_message: String,
+        payer_message: Option<String>,
         status: String,
         reason: Reason,
     },
@@ -288,9 +289,9 @@ pub enum CallbackResponse {
         currency: String,
         payee: Party,
         #[serde(rename = "payeeNote")]
-        payee_note: String,
+        payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
-        payer_message: String,
+        payer_message: Option<String>,
         status: String,
     },
 
@@ -304,9 +305,9 @@ pub enum CallbackResponse {
         currency: String,
         payee: Party,
         #[serde(rename = "payeeNote")]
-        payee_note: String,
+        payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
-        payer_message: String,
+        payer_message: Option<String>,
         status: String,
         reason: Reason,
     },
@@ -321,9 +322,9 @@ pub enum CallbackResponse {
         currency: String,
         payee: Party,
         #[serde(rename = "payeeNote")]
-        payee_note: String,
+        payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
-        payer_message: String,
+        payer_message: Option<String>,
         status: String,
     },
 
@@ -337,9 +338,9 @@ pub enum CallbackResponse {
         currency: String,
         payee: Party,
         #[serde(rename = "payeeNote")]
-        payee_note: String,
+        payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
-        payer_message: String,
+        payer_message: Option<String>,
         status: String,
         reason: Reason,
     },
@@ -354,9 +355,9 @@ pub enum CallbackResponse {
         currency: String,
         payee: Party,
         #[serde(rename = "payeeNote")]
-        payee_note: String,
+        payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
-        payer_message: String,
+        payer_message: Option<String>,
         status: String,
     },
 
@@ -370,9 +371,9 @@ pub enum CallbackResponse {
         currency: String,
         payee: Party,
         #[serde(rename = "payeeNote")]
-        payee_note: String,
+        payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
-        payer_message: String,
+        payer_message: Option<String>,
         status: String,
         reason: Reason,
     },
@@ -387,9 +388,9 @@ pub enum CallbackResponse {
         currency: String,
         payee: Party,
         #[serde(rename = "payeeNote")]
-        payee_note: String,
+        payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
-        payer_message: String,
+        payer_message: Option<String>,
         status: String,
     },
 
@@ -403,9 +404,9 @@ pub enum CallbackResponse {
         currency: String,
         payee: Party,
         #[serde(rename = "payeeNote")]
-        payee_note: String,
+        payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
-        payer_message: String,
+        payer_message: Option<String>,
         status: String,
         reason: Reason,
     },
@@ -459,6 +460,7 @@ pub enum CallbackResponse {
     },
 }
 
+#[derive(Clone, Debug)]
 pub struct MomoUpdates {
     pub remote_address: String,
     pub response: CallbackResponse,

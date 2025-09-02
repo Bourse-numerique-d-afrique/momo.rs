@@ -5,6 +5,7 @@ node_modules
 collection_access_tokens.db
 disbursement_access_tokens.db
 remittance_access_tokens.db
+.mtn_api_users.json
 /**/target
 /**/Cargo.lock
 .claude

@@ -47,6 +47,7 @@ callback-server = []
 [dev-dependencies]
 once_cell = "1.18.0"
 test-case = "3.3"
+momo-callback-server = { path = "momo-callback-server" }
 
 
 [dependencies.uuid]

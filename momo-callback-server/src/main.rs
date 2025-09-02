@@ -1,13 +1,12 @@
 // MTN MoMo Callback Server - Main executable
 
-use std::env;
 use std::error::Error;
 
 use futures_core::Stream;
 use futures_util::StreamExt;
-use poem::listener::{Listener, TcpListener, RustlsConfig};
+use poem::listener::TcpListener;
 use poem::middleware::AddData;
-use poem::web::{Data, Path};
+use poem::web::Data;
 use poem::{handler, post, get, Body, Request, Response, Route, Server, EndpointExt};
 use tokio::sync::mpsc::{self, Sender};
 use tracing::{info, warn, error};
@@ -18,13 +17,11 @@ use mtnmomo::{CallbackResponse, CallbackType, MomoUpdates};
 /// Configuration structure for the MTN MoMo callback server.
 ///
 /// This structure holds all the necessary configuration parameters for running
-/// the callback server, including TLS certificate paths, network binding configuration,
-/// and server settings.
+/// the callback server, including network binding configuration and server settings.
 ///
 /// ## Examples
 ///
 /// ```rust,no_run
-/// use std::env;
 /// # use momo_callback_server::CallbackServerConfig;
 ///
 /// // Create configuration with default values
@@ -32,82 +29,44 @@ use mtnmomo::{CallbackResponse, CallbackType, MomoUpdates};
 ///
 /// // Create configuration with custom values
 /// let config = CallbackServerConfig {
-///     cert_path: "/path/to/custom/cert.pem".to_string(),
-///     key_path: "/path/to/custom/key.pem".to_string(),
-///     port: 8443,
+///     http_port: 8500,
 ///     host: "127.0.0.1".to_string(),
 /// };
 /// ```
-///
-/// ## Environment Variables
-///
-/// The default implementation reads from these environment variables:
-/// - `TLS_CERT_PATH`: Path to the TLS certificate file
-/// - `TLS_KEY_PATH`: Path to the TLS private key file
-///
-/// ## Security Notes
-///
-/// - Ensure certificate and key files have appropriate permissions (600 or 400)
-/// - Use absolute paths for production deployments
-/// - Verify certificate validity before starting the server
 #[derive(Debug, Clone)]
 pub struct CallbackServerConfig {
-    /// Path to the TLS certificate file in PEM format.
+    /// HTTP port number for the server to bind to.
     ///
-    /// This should be a valid X.509 certificate that matches your domain name.
-    /// The certificate file must be readable by the server process.
-    pub cert_path: String,
-
-    /// Path to the TLS private key file in PEM format.
-    ///
-    /// This should be the private key corresponding to the certificate.
-    /// Keep this file secure and readable only by the server process.
-    pub key_path: String,
-
-    /// Port number for the server to bind to.
-    ///
-    /// Default is 443 (HTTPS). For non-root deployments, use ports > 1024
-    /// or configure proper capabilities.
-    pub port: u16,
+    /// Default is 8500. For development deployments, use ports > 1024.
+    pub http_port: u16,
 
     /// Host address to bind the server to.
     ///
-    /// Default is "0.0.0.0" (all interfaces). Use "127.0.0.1" for localhost only.
+    /// Default is "127.0.0.1" (localhost only). Use "0.0.0.0" to bind to all interfaces.
     pub host: String,
 }
 
 impl Default for CallbackServerConfig {
     /// Creates a default configuration for the callback server.
     ///
-    /// This implementation reads configuration from environment variables with
-    /// sensible fallback defaults:
+    /// This implementation provides sensible fallback defaults:
     ///
-    /// - `cert_path`: `TLS_CERT_PATH` env var or "cert.pem"
-    /// - `key_path`: `TLS_KEY_PATH` env var or "key.pem"
-    /// - `port`: 443 (HTTPS standard port)
-    /// - `host`: "0.0.0.0" (bind to all interfaces)
+    /// - `http_port`: 8500 (custom HTTP port)
+    /// - `host`: "127.0.0.1" (localhost only)
     ///
     /// ## Examples
     ///
     /// ```rust,no_run
     /// # use momo_callback_server::CallbackServerConfig;
-    /// use std::env;
     ///
-    /// // Set environment variables
-    /// env::set_var("TLS_CERT_PATH", "/etc/ssl/certs/server.pem");
-    /// env::set_var("TLS_KEY_PATH", "/etc/ssl/private/server.key");
-    ///
-    /// // Create default configuration (will use env vars)
+    /// // Create default configuration
     /// let config = CallbackServerConfig::default();
-    /// assert_eq!(config.cert_path, "/etc/ssl/certs/server.pem");
-    /// assert_eq!(config.port, 443);
+    /// assert_eq!(config.http_port, 8500);
     /// ```
     fn default() -> Self {
         Self {
-            cert_path: env::var("TLS_CERT_PATH").unwrap_or_else(|_| "cert.pem".to_string()),
-            key_path: env::var("TLS_KEY_PATH").unwrap_or_else(|_| "key.pem".to_string()),
-            port: 443,
-            host: "0.0.0.0".to_string(),
+            http_port: 8500,
+            host: "127.0.0.1".to_string(),
         }
     }
 }
@@ -155,6 +114,12 @@ impl Default for CallbackServerConfig {
 /// ```
 #[handler]
 async fn health_check() -> &'static str {
+    "OK"
+}
+
+
+#[handler]
+async fn root_check() -> &'static str {
     "OK"
 }
 
@@ -212,7 +177,7 @@ async fn health_check() -> &'static str {
 /// # MTN MoMo API sends callback
 /// curl -X POST https://your-server.com/collection_request_to_pay/REQUEST_TO_PAY \
 ///   -H "Content-Type: application/json" \
-///   -d '{
+///   -d '{ 
 ///     "financialTransactionId": "123456",
 ///     "externalId": "payment-001",
 ///     "amount": "100",
@@ -225,12 +190,12 @@ async fn mtn_callback_handler(
     req: &Request,
     mut body: Body,
     sender: Data<&Sender<MomoUpdates>>,
-    Path(callback_type): Path<String>,
 ) -> Result<Response, poem::Error> {
     let remote_address = req.remote_addr().to_string();
     let body_string = body.into_string().await?;
     
-    info!("Received callback from {}: {}", remote_address, callback_type);
+    info!("Received callback from {}", remote_address);
+    info!("Raw callback body: {}", body_string);
     
     let response_result: Result<CallbackResponse, serde_json::Error> =
         serde_json::from_str(&body_string);
@@ -240,13 +205,13 @@ async fn mtn_callback_handler(
             let momo_updates = MomoUpdates {
                 remote_address,
                 response: callback_response,
-                update_type: CallbackType::from_string(&callback_type),
+                update_type: CallbackType::from_string(&"SUCCESS"),
             };
             
             if let Err(e) = sender.send(momo_updates).await {
                 error!("Failed to send callback update: {}", e);
             } else {
-                info!("Successfully processed {} callback", callback_type);
+                info!("Successfully processed callback");
             }
         }
         Err(e) => {
@@ -325,209 +290,99 @@ async fn mtn_callback_handler(
 ///
 /// ```bash
 /// # Collection payment callback
-/// POST /collection_request_to_pay/REQUEST_TO_PAY
+/// POST /collection_request_to_pay
 ///
 /// # Disbursement deposit callback
-/// POST /disbursement_deposit_v1/DISBURSEMENT_DEPOSIT_V1
+/// POST /disbursement_deposit_v1
 ///
 /// # Health check
 /// GET /health
 /// ```
 fn create_callback_routes() -> Route {
     Route::new()
-        // Collection callbacks
         .at(
-            "/collection_request_to_pay/:callback_type",
-            post(mtn_callback_handler),
+            "/collection_request_to_pay",
+            post(mtn_callback_handler).put(mtn_callback_handler),
         )
         .at(
-            "/collection_request_to_withdraw_v1/:callback_type",
-            post(mtn_callback_handler),
+            "/collection_request_to_withdraw_v1",
+            post(mtn_callback_handler).put(mtn_callback_handler),
         )
         .at(
-            "/collection_request_to_withdraw_v2/:callback_type",
-            post(mtn_callback_handler),
+            "/collection_request_to_withdraw_v2",
+            post(mtn_callback_handler).put(mtn_callback_handler),
         )
         .at(
-            "/collection_invoice/:callback_type",
-            post(mtn_callback_handler),
+            "/collection_invoice",
+            post(mtn_callback_handler).put(mtn_callback_handler),
         )
         .at(
-            "/collection_payment/:callback_type",
-            post(mtn_callback_handler),
+            "/collection_payment",
+            post(mtn_callback_handler).put(mtn_callback_handler),
         )
         .at(
-            "/collection_preapproval/:callback_type",
-            post(mtn_callback_handler),
+            "/collection_preapproval",
+            post(mtn_callback_handler).put(mtn_callback_handler),
         )
         // Disbursement callbacks
         .at(
-            "/disbursement_deposit_v1/:callback_type",
-            post(mtn_callback_handler),
+            "/disbursement_deposit_v1",
+            post(mtn_callback_handler).put(mtn_callback_handler),
         )
         .at(
-            "/disbursement_deposit_v2/:callback_type",
-            post(mtn_callback_handler),
+            "/disbursement_deposit_v2",
+            post(mtn_callback_handler).put(mtn_callback_handler),
         )
         .at(
-            "/disbursement_refund_v1/:callback_type",
-            post(mtn_callback_handler),
+            "/disbursement_refund_v1",
+            post(mtn_callback_handler).put(mtn_callback_handler),
         )
         .at(
-            "/disbursement_refund_v2/:callback_type",
-            post(mtn_callback_handler),
+            "/disbursement_refund_v2",
+            post(mtn_callback_handler).put(mtn_callback_handler),
         )
         .at(
-            "/disbursement_transfer/:callback_type",
-            post(mtn_callback_handler),
+            "/disbursement_transfer",
+            post(mtn_callback_handler).put(mtn_callback_handler),
         )
         // Remittance callbacks
         .at(
-            "/remittance_cash_transfer/:callback_type",
-            post(mtn_callback_handler),
+            "/remittance_cash_transfer",
+            post(mtn_callback_handler).put(mtn_callback_handler),
         )
         .at(
-            "/remittance_transfer/:callback_type",
-            post(mtn_callback_handler),
+            "/remittance_transfer",
+            post(mtn_callback_handler).put(mtn_callback_handler),
         )
         // Health check endpoint
         .at("/health", get(health_check))
 }
 
-/// Loads and validates TLS configuration from certificate and key files.
-///
-/// This function reads the TLS certificate and private key files specified in the
-/// configuration, validates their format, and creates a `RustlsConfig` object
-/// for secure HTTPS connections.
-///
-/// ## Parameters
-///
-/// - `config`: Configuration containing paths to certificate and key files
-///
-/// ## Returns
-///
-/// - `Ok(RustlsConfig)`: Successfully loaded and configured TLS settings
-/// - `Err(Box<dyn Error>)`: Failed to load or validate certificate/key files
-///
-/// ## File Requirements
-///
-/// ### Certificate File (cert.pem)
-/// - Must be in PEM format
-/// - Should contain a valid X.509 certificate
-/// - Must be readable by the server process
-/// - Should match the domain name where server will be accessed
-///
-/// ### Private Key File (key.pem)
-/// - Must be in PEM format
-/// - Should be the private key corresponding to the certificate
-/// - Must be readable by the server process (recommended permissions: 600)
-/// - Should be kept secure and not shared
-///
-/// ## Security Considerations
-///
-/// - Files are read once at startup and kept in memory
-/// - Private key should have restrictive file permissions (600 or 400)
-/// - Certificate should be from a trusted Certificate Authority for production
-/// - Both files should be stored securely and backed up
-///
-/// ## Error Cases
-///
-/// This function will return an error if:
-/// - Certificate file doesn't exist or isn't readable
-/// - Private key file doesn't exist or isn't readable
-/// - Certificate file is not valid PEM format
-/// - Private key file is not valid PEM format
-/// - Certificate and private key don't match
-/// - Files contain malformed or corrupted data
-///
-/// ## Examples
-///
-/// ```rust,no_run
-/// # use momo_callback_server::{CallbackServerConfig, load_tls_config};
-/// # #[tokio::main]
-/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let config = CallbackServerConfig {
-///     cert_path: "/etc/ssl/certs/server.pem".to_string(),
-///     key_path: "/etc/ssl/private/server.key".to_string(),
-///     port: 443,
-///     host: "0.0.0.0".to_string(),
-/// };
-///
-/// match load_tls_config(&config).await {
-///     Ok(tls_config) => {
-///         println!("TLS configuration loaded successfully");
-///         // Use tls_config with the server
-///     }
-///     Err(e) => {
-///         eprintln!("Failed to load TLS configuration: {}", e);
-///         std::process::exit(1);
-///     }
-/// }
-/// # Ok(())
-/// # }
-/// ```
-///
-/// ## Certificate Generation
-///
-/// For development/testing, you can generate self-signed certificates:
-///
-/// ```bash
-/// # Generate private key
-/// openssl genrsa -out key.pem 2048
-///
-/// # Generate self-signed certificate
-/// openssl req -new -x509 -key key.pem -out cert.pem -days 365
-/// ```
-///
-/// For production, obtain certificates from a trusted CA like Let's Encrypt:
-///
-/// ```bash
-/// # Using certbot for Let's Encrypt
-/// certbot certonly --standalone -d your-domain.com
-/// ```
-async fn load_tls_config(config: &CallbackServerConfig) -> Result<RustlsConfig, Box<dyn Error>> {
-    info!("Loading TLS certificate from: {}", config.cert_path);
-    info!("Loading TLS private key from: {}", config.key_path);
-    
-    let cert_data = std::fs::read(&config.cert_path)?;
-    let key_data = std::fs::read(&config.key_path)?;
-    
-    use poem::listener::RustlsCertificate;
-    
-    let certificate = RustlsCertificate::new()
-        .cert(cert_data)
-        .key(key_data);
-        
-    let tls_config = RustlsConfig::new()
-        .fallback(certificate);
 
-    info!("TLS configuration loaded successfully");
-    Ok(tls_config)
-}
+
 
 /// Starts the MTN MoMo callback server with the specified configuration.
 ///
-/// This is the main function that initializes and starts the callback server. It sets up
-/// TLS configuration, creates the web application with all routes and middleware, starts
-/// the server in a background task, and returns a stream of processed callbacks.
+/// This is the main function that initializes and starts the callback server. It creates
+/// the web application with all routes and middleware, starts the server in a background
+/// task, and returns a stream of processed callbacks.
 ///
 /// ## Parameters
 ///
-/// - `config`: Server configuration including TLS settings and network binding
+/// - `config`: Server configuration including network binding settings
 ///
 /// ## Returns
 ///
 /// - `Ok(Stream<Item = MomoUpdates>)`: A stream of processed callback updates
-/// - `Err(Box<dyn Error>)`: Startup error (TLS config, network binding, etc.)
+/// - `Err(Box<dyn Error>)`: Startup error (network binding, etc.)
 ///
 /// ## Server Lifecycle
 ///
-/// 1. **TLS Configuration**: Loads and validates certificate and key files
-/// 2. **Route Setup**: Creates all callback routes and middleware stack
-/// 3. **Network Binding**: Binds to the specified host and port with TLS
-/// 4. **Background Task**: Spawns server in a background tokio task
-/// 5. **Channel Setup**: Creates communication channel for callback processing
-/// 6. **Stream Return**: Returns async stream of incoming callbacks
+/// 1. **Route Setup**: Creates all callback routes and middleware stack
+/// 2. **Network Binding**: Binds to the specified host and port
+/// 3. **Background Task**: Spawns server in a background tokio task
+/// 4. **Channel Setup**: Creates communication channel for callback processing
+/// 5. **Stream Return**: Returns async stream of incoming callbacks
 ///
 /// ## Graceful Shutdown
 ///
@@ -539,7 +394,6 @@ async fn load_tls_config(config: &CallbackServerConfig) -> Result<RustlsConfig, 
 /// ## Error Scenarios
 ///
 /// The function will return an error in these cases:
-/// - TLS certificate or key files are missing or invalid
 /// - Port is already in use or requires elevated privileges
 /// - Network interface is not available
 /// - Insufficient memory or system resources
@@ -576,9 +430,7 @@ async fn load_tls_config(config: &CallbackServerConfig) -> Result<RustlsConfig, 
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     let config = CallbackServerConfig {
-///         cert_path: "/etc/ssl/certs/my-cert.pem".to_string(),
-///         key_path: "/etc/ssl/private/my-key.pem".to_string(),
-///         port: 8443,  // Non-standard port
+///         http_port: 8500,  // Custom port
 ///         host: "127.0.0.1".to_string(),  // Localhost only
 ///     };
 ///
@@ -614,10 +466,8 @@ async fn load_tls_config(config: &CallbackServerConfig) -> Result<RustlsConfig, 
 /// ## Performance Considerations
 ///
 /// - Uses tokio async runtime for high concurrency
-/// - TLS termination is handled efficiently by rustls
 /// - Callback processing is non-blocking via channels
 /// - Memory usage scales with concurrent connections
-/// - CPU usage is primarily for TLS encryption/decryption
 ///
 /// ## Monitoring
 ///
@@ -627,24 +477,18 @@ async fn load_tls_config(config: &CallbackServerConfig) -> Result<RustlsConfig, 
 /// - Health check endpoint at `/health`
 /// - Detailed error logging with context
 ///
-/// ## Production Deployment
+/// ## Development Deployment
 ///
-/// For production use, consider:
-/// - Running behind a reverse proxy (nginx, traefik)
-/// - Using process managers (systemd, supervisor)
-/// - Implementing log rotation and monitoring
-/// - Setting up automated certificate renewal
-/// - Configuring firewall rules for port 443
+/// For development use:
+/// - Server runs on localhost only for security
+/// - Uses non-privileged port 8500
 pub async fn start_callback_server(
     config: CallbackServerConfig,
 ) -> Result<impl Stream<Item = MomoUpdates>, Box<dyn Error>> {
     info!("Starting MTN MoMo Callback Server");
-    info!("Host: {}, Port: {}", config.host, config.port);
+    info!("Host: {}, Port: {}", config.host, config.http_port);
     
     let (tx, mut rx) = mpsc::channel::<MomoUpdates>(100);
-    
-    // Load TLS configuration
-    let tls_config = load_tls_config(&config).await?;
     
     // Create the application with routes and middleware
     let app = create_callback_routes()
@@ -652,15 +496,16 @@ pub async fn start_callback_server(
         .with(poem::middleware::Cors::new())
         .with(poem::middleware::Compression::default())
         .with(poem::middleware::RequestId::default())
-        .with(AddData::new(tx));
+        .with(AddData::new(tx.clone()));
 
-    // Start the server
-    let bind_address = format!("{}:{}", config.host, config.port);
-    info!("Binding to address: {}", bind_address);
+    // Start the server on the HTTP port only
+    let bind_address = format!("{}:{}", config.host, config.http_port);
     
+    info!("Binding server to address: {}", bind_address);
+    
+    // Start HTTP server  
     tokio::spawn(async move {
-        let listener = TcpListener::bind(&bind_address)
-            .rustls(tls_config);
+        let listener = TcpListener::bind(&bind_address);
         
         match Server::new(listener)
             .run_with_graceful_shutdown(
@@ -697,17 +542,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Load configuration
     let config = CallbackServerConfig::default();
-    
-    // Validate certificate files exist
-    if !std::path::Path::new(&config.cert_path).exists() {
-        error!("Certificate file not found: {}", config.cert_path);
-        std::process::exit(1);
-    }
-    
-    if !std::path::Path::new(&config.key_path).exists() {
-        error!("Private key file not found: {}", config.key_path);
-        std::process::exit(1);
-    }
 
     // Start the callback server
     let callback_stream = start_callback_server(config).await?;
@@ -1123,7 +957,7 @@ async fn handle_disbursement_callback(update: &MomoUpdates) {
             financial_transaction_id,
         } => {
             info!("Disbursement successful - Reference ID: {}, Transaction ID: {}", 
-                  reference_id, financial_transaction_id);
+                  reference_id, financial_transaction_id.as_ref().unwrap_or(&"N/A".to_string()));
         }
         CallbackResponse::PaymentFailed {
             reference_id,
@@ -1132,7 +966,7 @@ async fn handle_disbursement_callback(update: &MomoUpdates) {
             reason,
         } => {
             info!("Disbursement failed - Reference ID: {}, Transaction ID: {}, Reason: {:?}", 
-                  reference_id, financial_transaction_id, reason);
+                  reference_id, financial_transaction_id.as_ref().unwrap_or(&"N/A".to_string()), reason);
         }
         CallbackResponse::DisbursementDepositV1Success {
             external_id,

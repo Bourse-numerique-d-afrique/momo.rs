@@ -176,7 +176,7 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", callback_url);
+                req = req.header("X-Callback-Url", format!("{}/collection_invoice", callback_url));
             }
         }
 
@@ -217,7 +217,7 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", callback_url);
+                req = req.header("X-Callback-Url", format!("{}/collection_invoice", callback_url));
             }
         }
 
@@ -258,7 +258,7 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", callback_url);
+                req = req.header("X-Callback-Url", format!("{}/collection_payment", callback_url));
             }
         }
 
@@ -390,11 +390,12 @@ impl Collection {
     pub async fn pre_approval(
         &self,
         preaproval: PreApprovalRequest,
+        callback_url: Option<&str>,
     ) -> Result<String, Box<dyn std::error::Error>> {
         let external_id = uuid::Uuid::new_v4().to_string();
         let client = reqwest::Client::new();
         let access_token = self.http_client.get_or_create_token().await?;
-        let res = client
+        let mut req = client
             .post(format!("{}/collection/v2_0/preapproval", self.url))
             .bearer_auth(access_token.access_token)
             .header("X-Target-Environment", self.environment.to_string())
@@ -402,9 +403,15 @@ impl Collection {
             .header("Content-Type", "application/json")
             .header("X-Reference-Id", &external_id)
             .header("Ocp-Apim-Subscription-Key", &self.primary_key)
-            .body(preaproval)
-            .send()
-            .await?;
+            .body(preaproval);
+
+        if let Some(callback_url) = callback_url {
+            if !callback_url.is_empty() {
+                req = req.header("X-Callback-Url", format!("{}/collection_preapproval", callback_url));
+            }
+        }
+
+        let res = req.send().await?;
 
         if res.status().is_success() {
             Ok(external_id)
@@ -445,7 +452,8 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", callback_url);
+                println!("Using callback_url: {}", callback_url);
+                req = req.header("x-callback-url", format!("{}/collection_request_to_pay", callback_url));
             }
         }
 
@@ -599,7 +607,7 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", callback_url);
+                req = req.header("X-Callback-Url", format!("{}/collection_request_to_withdraw_v1", callback_url));
             }
         }
 
@@ -643,7 +651,7 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", callback_url);
+                req = req.header("X-Callback-Url", format!("{}/collection_request_to_withdraw_v2", callback_url));
             }
         }
 
@@ -1178,7 +1186,7 @@ mod tests {
             payer_message: "".to_string(),
             validity_time: 3600,
         };
-        let res = collection.pre_approval(preapproval).await;
+        let res = collection.pre_approval(preapproval, None).await;
         if res.is_ok() {
             assert!(true);
         }
@@ -1214,7 +1222,7 @@ mod tests {
             payer_message: "".to_string(),
             validity_time: 3600,
         };
-        let res = collection.pre_approval(preapproval).await;
+        let res = collection.pre_approval(preapproval, None).await;
 
         if res.is_ok() {
             let res = collection
