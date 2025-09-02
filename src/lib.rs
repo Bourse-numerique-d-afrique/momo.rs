@@ -127,7 +127,7 @@ pub type CashTransferResult = responses::cash_transfer_result::CashTransferResul
 pub type TransferResult = responses::transfer_result::TransferResult;
 
 // Re-export callback types
-pub use callback::{CallbackResponse, MomoCallbackListener, MomoUpdates, Reason};
+pub use callback::{CallbackResponse,  MomoUpdates, Reason};
 
 // Re-export callback server types when feature is enabled
 #[cfg(feature = "callback-server")]

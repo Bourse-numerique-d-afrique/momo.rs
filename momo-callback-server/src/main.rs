@@ -9,7 +9,7 @@ use poem::middleware::AddData;
 use poem::web::Data;
 use poem::{handler, post, get, Body, Request, Response, Route, Server, EndpointExt};
 use tokio::sync::mpsc::{self, Sender};
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 use tracing_subscriber;
 
 use mtnmomo::{CallbackResponse, CallbackType, MomoUpdates};
@@ -205,7 +205,6 @@ async fn mtn_callback_handler(
             let momo_updates = MomoUpdates {
                 remote_address,
                 response: callback_response,
-                update_type: CallbackType::from_string(&"SUCCESS"),
             };
             
             if let Err(e) = sender.send(momo_updates).await {
@@ -552,52 +551,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     use futures_util::pin_mut;
     pin_mut!(callback_stream);
     while let Some(update) = callback_stream.next().await {
-        info!("Processing callback: {:?}", update.update_type);
         info!("From: {}", update.remote_address);
         
         // Here you can add custom business logic to handle different callback types
-        match update.update_type {
-            CallbackType::RequestToPay => {
-                info!("Processing payment callback: {:?}", update.response);
-                handle_payment_callback(&update).await;
-            }
-            CallbackType::Invoice => {
-                info!("Processing invoice callback: {:?}", update.response);
-                handle_invoice_callback(&update).await;
-            }
-            CallbackType::DisbursementDepositV1 => {
-                info!("Processing disbursement deposit v1 callback: {:?}", update.response);
-                handle_disbursement_callback(&update).await;
-            }
-            CallbackType::DisbursementDepositV2 => {
-                info!("Processing disbursement deposit v2 callback: {:?}", update.response);
-                handle_disbursement_callback(&update).await;
-            }
-            CallbackType::DisbursementRefundV1 => {
-                info!("Processing disbursement refund v1 callback: {:?}", update.response);
-                handle_disbursement_callback(&update).await;
-            }
-            CallbackType::DisbursementRefundV2 => {
-                info!("Processing disbursement refund v2 callback: {:?}", update.response);
-                handle_disbursement_callback(&update).await;
-            }
-            CallbackType::DisbusrementTransfer => {
-                info!("Processing disbursement transfer callback: {:?}", update.response);
-                handle_disbursement_callback(&update).await;
-            }
-            CallbackType::RemittanceCashTransfer => {
-                info!("Processing remittance cash transfer callback: {:?}", update.response);
-                handle_remittance_callback(&update).await;
-            }
-            CallbackType::RemittanceTransfer => {
-                info!("Processing remittance transfer callback: {:?}", update.response);
-                handle_remittance_callback(&update).await;
-            }
-            _ => {
-                info!("Processing other callback type: {:?}", update.response);
-                handle_generic_callback(&update).await;
-            }
-        }
+        info!("Callback Type: {:?}", update.response);
     }
 
     Ok(())
@@ -1330,8 +1287,7 @@ async fn handle_remittance_callback(update: &MomoUpdates) {
 #[allow(dead_code)]
 async fn handle_generic_callback(update: &MomoUpdates) {
     info!("Generic callback processing started");
-    info!("Callback type: {:?}", update.update_type);
-    info!("Response: {:?}", update.response);
-    
+    info!("Generic callback received: {:?}", update.response);
+
     // Add your generic callback processing logic here
 }
