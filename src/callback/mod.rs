@@ -1,4 +1,4 @@
-use crate::enums::{reason::RequestToPayReason, request_to_pay_status::RequestToPayStatus};
+use crate::enums::{pre_approval_status::PreApprovalStatus, reason::RequestToPayReason, request_to_pay_status::RequestToPayStatus};
 use poem::error::ReadBodyError;
 use serde::{Deserialize, Serialize};
 
@@ -71,10 +71,10 @@ pub enum CallbackResponse {
         payer: Party,
         #[serde(rename = "payerCurrency")]
         payer_currency: String,
-        status: String,
+        status: PreApprovalStatus,
         #[serde(rename = "expirationDateTime")]
         expiration_date_time: String,
-        reason: Reason,
+        reason: Option<Reason>,
     },
 
     // pre approval success callback response
@@ -82,12 +82,13 @@ pub enum CallbackResponse {
         payer: Party,
         #[serde(rename = "payerCurrency")]
         payer_currency: String,
-        status: String,
+        status: PreApprovalStatus,
         #[serde(rename = "expirationDateTime")]
         expiration_date_time: String,
     },
 
-    // paymen failed callback response
+
+    // payment failed callback response
     PaymentFailed {
         #[serde(rename = "referenceId")]
         reference_id: String,

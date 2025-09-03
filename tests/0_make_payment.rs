@@ -397,7 +397,7 @@ mod tests {
                     if let mtnmomo::CallbackResponse::PreApprovalFailed { reason, .. } =
                         callback.response
                     {
-                        assert_eq!(reason.code, $expected_reason);
+                        assert_eq!(reason.unwrap().code, $expected_reason);
                     } else {
                         panic!(
                             "Expected PreApprovalFailed callback, got {:?}",
