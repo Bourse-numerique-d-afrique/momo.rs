@@ -1,8 +1,8 @@
-use crate::enums::{pre_approval_status::PreApprovalStatus, reason::RequestToPayReason, request_to_pay_status::RequestToPayStatus};
 use poem::error::ReadBodyError;
 use serde::{Deserialize, Serialize};
 
 use crate::Party;
+use crate::enums::reason::RequestToPayReason;
 
 #[derive(thiserror::Error, Debug)]
 #[allow(dead_code)]
@@ -30,6 +30,151 @@ pub struct Reason {
     pub message: String,
 }
 
+/// Individual status enums for better parsing
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum RequestToPaySuccessfulStatus {
+    #[serde(rename = "SUCCESSFUL")]
+    SUCCESSFUL,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum RequestToPayFailedStatus {
+    #[serde(rename = "FAILED")]
+    FAILED,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum PreApprovalPendingStatus {
+    #[serde(rename = "PENDING")]
+    PENDING,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum PreApprovalSuccessfulStatus {
+    #[serde(rename = "SUCCESSFUL")]
+    SUCCESSFUL,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum PreApprovalFailedStatus {
+    #[serde(rename = "FAILED")]
+    FAILED,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum PreApprovalCreatedStatus {
+    #[serde(rename = "CREATED")]
+    CREATED,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum PaymentFailedStatus {
+    #[serde(rename = "FAILED")]
+    FAILED,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum PaymentSucceededStatus {
+    #[serde(rename = "SUCCESSFUL")]
+    SUCCESSFUL,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum InvoiceFailedStatus {
+    #[serde(rename = "FAILED")]
+    FAILED,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum InvoiceSucceededStatus {
+    #[serde(rename = "SUCCESSFUL")]
+    SUCCESSFUL,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum CashTransferFailedStatus {
+    #[serde(rename = "FAILED")]
+    FAILED,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum CashTransferSucceededStatus {
+    #[serde(rename = "SUCCESSFUL")]
+    SUCCESSFUL,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum DisbursementDepositV1FailedStatus {
+    #[serde(rename = "FAILED")]
+    FAILED,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum DisbursementDepositV1SuccessStatus {
+    #[serde(rename = "SUCCESSFUL")]
+    SUCCESSFUL,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum DisbursementDepositV2FailedStatus {
+    #[serde(rename = "FAILED")]
+    FAILED,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum DisbursementDepositV2SuccessStatus {
+    #[serde(rename = "SUCCESSFUL")]
+    SUCCESSFUL,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum DisbursementRefundV1FailedStatus {
+    #[serde(rename = "FAILED")]
+    FAILED,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum DisbursementRefundV1SuccessStatus {
+    #[serde(rename = "SUCCESSFUL")]
+    SUCCESSFUL,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum DisbursementRefundV2FailedStatus {
+    #[serde(rename = "FAILED")]
+    FAILED,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum DisbursementRefundV2SuccessStatus {
+    #[serde(rename = "SUCCESSFUL")]
+    SUCCESSFUL,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum DisbursementTransferFailedStatus {
+    #[serde(rename = "FAILED")]
+    FAILED,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum DisbursementTransferSuccessStatus {
+    #[serde(rename = "SUCCESSFUL")]
+    SUCCESSFUL,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum RemittanceTransferFailedStatus {
+    #[serde(rename = "FAILED")]
+    FAILED,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum RemittanceTransferSuccessStatus {
+    #[serde(rename = "SUCCESSFUL")]
+    SUCCESSFUL,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum CallbackResponse {
@@ -46,7 +191,7 @@ pub enum CallbackResponse {
         payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
-        status: RequestToPayStatus,
+        status: RequestToPayFailedStatus,
         reason: RequestToPayReason,
     },
 
@@ -63,7 +208,7 @@ pub enum CallbackResponse {
         payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
-        status: RequestToPayStatus,
+        status: RequestToPaySuccessfulStatus,
     },
 
     // pre approval failed callback response
@@ -71,7 +216,7 @@ pub enum CallbackResponse {
         payer: Party,
         #[serde(rename = "payerCurrency")]
         payer_currency: String,
-        status: PreApprovalStatus,
+        status: PreApprovalFailedStatus,
         #[serde(rename = "expirationDateTime")]
         expiration_date_time: String,
         reason: Option<Reason>,
@@ -82,17 +227,36 @@ pub enum CallbackResponse {
         payer: Party,
         #[serde(rename = "payerCurrency")]
         payer_currency: String,
-        status: PreApprovalStatus,
+        status: PreApprovalSuccessfulStatus,
         #[serde(rename = "expirationDateTime")]
         expiration_date_time: String,
     },
 
+    // pre approval pending callback response
+    PreApprovalPending {
+        payer: Party,
+        #[serde(rename = "payerCurrency")]
+        payer_currency: String,
+        status: PreApprovalPendingStatus,
+        #[serde(rename = "expirationDateTime")]
+        expiration_date_time: String,
+    },
+
+    // pre approval created callback response
+    PreApprovalCreated {
+        payer: Party,
+        #[serde(rename = "payerCurrency")]
+        payer_currency: String,
+        status: PreApprovalCreatedStatus,
+        #[serde(rename = "expirationDateTime")]
+        expiration_date_time: String,
+    },
 
     // payment failed callback response
     PaymentFailed {
         #[serde(rename = "referenceId")]
         reference_id: String,
-        status: String,
+        status: PaymentFailedStatus,
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: Option<String>,
         reason: Reason,
@@ -102,7 +266,7 @@ pub enum CallbackResponse {
     PaymentSucceeded {
         #[serde(rename = "referenceId")]
         reference_id: String,
-        status: String,
+        status: PaymentSucceededStatus,
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: Option<String>,
     },
@@ -115,7 +279,7 @@ pub enum CallbackResponse {
         external_id: String,
         amount: String,
         currency: String,
-        status: String,
+        status: InvoiceFailedStatus,
         #[serde(rename = "paymentReference")]
         payment_reference: String,
         #[serde(rename = "invoiceId")]
@@ -137,7 +301,7 @@ pub enum CallbackResponse {
         external_id: String,
         amount: String,
         currency: String,
-        status: String,
+        status: InvoiceSucceededStatus,
         #[serde(rename = "paymentReference")]
         payment_reference: String,
         #[serde(rename = "invoiceId")]
@@ -149,11 +313,11 @@ pub enum CallbackResponse {
         description: String,
     },
 
-    // cash trasnfer failed callaback response
+    // cash transfer failed callaback response
     CashTransferFailed {
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: String,
-        status: String,
+        status: CashTransferFailedStatus,
         reason: String,
         amount: String,
         currency: String,
@@ -197,7 +361,7 @@ pub enum CallbackResponse {
     CashTransferSucceeded {
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: String,
-        status: String,
+        status: CashTransferSucceededStatus,
         reason: String,
         amount: String,
         currency: String,
@@ -247,7 +411,7 @@ pub enum CallbackResponse {
         payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
-        status: String,
+        status: DisbursementDepositV1FailedStatus,
         reason: Reason,
     },
 
@@ -264,7 +428,7 @@ pub enum CallbackResponse {
         payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
-        status: String,
+        status: DisbursementDepositV1SuccessStatus,
     },
 
     // disbursement deposit v2 failed callback response
@@ -280,7 +444,7 @@ pub enum CallbackResponse {
         payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
-        status: String,
+        status: DisbursementDepositV2FailedStatus,
         reason: Reason,
     },
 
@@ -297,7 +461,7 @@ pub enum CallbackResponse {
         payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
-        status: String,
+        status: DisbursementDepositV2SuccessStatus,
     },
 
     // disbursement refund v1 failed callback response
@@ -313,7 +477,7 @@ pub enum CallbackResponse {
         payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
-        status: String,
+        status: DisbursementRefundV1FailedStatus,
         reason: Reason,
     },
 
@@ -330,7 +494,7 @@ pub enum CallbackResponse {
         payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
-        status: String,
+        status: DisbursementRefundV1SuccessStatus,
     },
 
     // disbursement refund v2 failed callback response
@@ -346,7 +510,7 @@ pub enum CallbackResponse {
         payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
-        status: String,
+        status: DisbursementRefundV2FailedStatus,
         reason: Reason,
     },
 
@@ -363,7 +527,7 @@ pub enum CallbackResponse {
         payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
-        status: String,
+        status: DisbursementRefundV2SuccessStatus,
     },
 
     // disbursement transfer failed callback response
@@ -379,7 +543,7 @@ pub enum CallbackResponse {
         payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
-        status: String,
+        status: DisbursementTransferFailedStatus,
         reason: Reason,
     },
 
@@ -396,14 +560,14 @@ pub enum CallbackResponse {
         payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
-        status: String,
+        status: DisbursementTransferSuccessStatus,
     },
 
     // remittance transfer failed callback response
     RemittanceTransferFailed {
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: String,
-        status: String,
+        status: RemittanceTransferFailedStatus,
         reason: String,
         amount: String,
         currency: String,
@@ -428,7 +592,7 @@ pub enum CallbackResponse {
     RemittanceTransferSuccess {
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: String,
-        status: String,
+        status: RemittanceTransferSuccessStatus,
         reason: String,
         amount: String,
         currency: String,

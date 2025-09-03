@@ -5,7 +5,13 @@ mod tests {
     use crate::common::CallbackTestHelper;
     use futures_util::StreamExt;
     use mtnmomo::{
-        enums::reason::RequestToPayReason, Currency, Momo, Party, PartyIdType, RefundRequest,
+        enums::reason::RequestToPayReason,
+        callback::{
+            DisbursementDepositV1SuccessStatus, DisbursementDepositV1FailedStatus,
+            DisbursementTransferSuccessStatus, DisbursementTransferFailedStatus,
+            DisbursementRefundV1FailedStatus,
+        },
+        Currency, Momo, Party, PartyIdType, RefundRequest,
         TransferRequest,
     };
     use std::env;
@@ -79,7 +85,7 @@ mod tests {
                 assert_eq!(currency, transfer.currency.to_string());
                 assert_eq!(payee.party_id, transfer.payee.party_id);
                 assert_eq!(payee_note, Some(transfer.payee_note));
-                assert_eq!(status, "SUCCESSFUL");
+                assert_eq!(status, DisbursementDepositV1SuccessStatus::SUCCESSFUL);
                 assert!(!financial_transaction_id.is_empty());
             } else {
                 panic!(
@@ -146,7 +152,7 @@ mod tests {
                         assert_eq!(currency, transfer.currency.to_string());
                         assert_eq!(payee.party_id, transfer.payee.party_id);
                         assert_eq!(payee_note, Some(transfer.payee_note));
-                        assert_eq!(status, "FAILED");
+                        assert_eq!(status, DisbursementDepositV1FailedStatus::FAILED);
                         assert_eq!(reason.code, $expected_reason);
                     } else {
                         panic!(
@@ -272,7 +278,7 @@ mod tests {
                         currency,
                         payee: _,
                         payee_note,
-                        payer_message: _,
+                        payer_message: _, // ignore if not needed
                         status,
                         reason,
                     } = callback.response
@@ -281,7 +287,7 @@ mod tests {
                         assert_eq!(amount, refund.amount);
                         assert_eq!(currency, refund.currency);
                         assert_eq!(payee_note, Some(refund.payee_note.clone()));
-                        assert_eq!(status, "FAILED");
+                        assert_eq!(status, DisbursementRefundV1FailedStatus::FAILED);
                         assert_eq!(reason.code, $expected_reason);
                     } else {
                         panic!(
@@ -411,7 +417,7 @@ mod tests {
                 assert_eq!(currency, transfer.currency.to_string());
                 assert_eq!(payee.party_id, transfer.payee.party_id);
                 assert_eq!(payee_note, Some(transfer.payee_note));
-                assert_eq!(status, "SUCCESSFUL");
+                assert_eq!(status, DisbursementTransferSuccessStatus::SUCCESSFUL);
                 assert!(!financial_transaction_id.is_empty());
             } else {
                 panic!(
@@ -478,7 +484,7 @@ mod tests {
                         assert_eq!(currency, transfer.currency.to_string());
                         assert_eq!(payee.party_id, transfer.payee.party_id);
                         assert_eq!(payee_note, Some(transfer.payee_note));
-                        assert_eq!(status, "FAILED");
+                        assert_eq!(status, DisbursementTransferFailedStatus::FAILED);
                         assert_eq!(reason.code, $expected_reason);
                     } else {
                         panic!(

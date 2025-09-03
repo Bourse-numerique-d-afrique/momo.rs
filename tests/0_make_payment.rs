@@ -5,7 +5,8 @@ mod tests {
     use crate::common::CallbackTestHelper;
     use futures_util::StreamExt;
     use mtnmomo::{
-        enums::{reason::RequestToPayReason, request_to_pay_status::RequestToPayStatus},
+        enums::reason::RequestToPayReason,
+        callback::{RequestToPaySuccessfulStatus, RequestToPayFailedStatus},
         Currency, Momo, Party, PartyIdType, PreApprovalRequest, RequestToPay,
     };
     use std::env;
@@ -86,7 +87,7 @@ mod tests {
                 assert_eq!(currency, request.currency.to_string());
                 assert_eq!(payer.party_id, request.payer.party_id);
                 assert_eq!(payee_note, Some(request.payee_note));
-                assert_eq!(status, RequestToPayStatus::SUCCESSFUL);
+                assert_eq!(status, RequestToPaySuccessfulStatus::SUCCESSFUL);
                 assert!(!financial_transaction_id.is_empty());
             } else {
                 panic!(
@@ -155,7 +156,7 @@ mod tests {
                         assert_eq!(currency, request.currency.to_string());
                         assert_eq!(payer.party_id, request.payer.party_id);
                         assert_eq!(payee_note, Some(request.payee_note));
-                        assert_eq!(status, RequestToPayStatus::FAILED);
+                        assert_eq!(status, RequestToPayFailedStatus::FAILED);
                         assert_eq!(reason, $expected_reason);
                     } else {
                         panic!(

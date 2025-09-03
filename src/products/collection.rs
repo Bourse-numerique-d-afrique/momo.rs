@@ -176,7 +176,7 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", format!("{}/collection_invoice", callback_url));
+                req = req.header("x-callback-url", format!("{}/collection_invoice", callback_url));
             }
         }
 
@@ -217,7 +217,7 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", format!("{}/collection_invoice", callback_url));
+                req = req.header("x-callback-url", format!("{}/collection_invoice", callback_url));
             }
         }
 
@@ -258,7 +258,7 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", format!("{}/collection_payment", callback_url));
+                req = req.header("x-callback-url", format!("{}/collection_payment", callback_url));
             }
         }
 
@@ -407,7 +407,7 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", format!("{}/collection_preapproval", callback_url));
+                req = req.header("x-callback-url", format!("{}/collection_preapproval", callback_url));
             }
         }
 
@@ -607,7 +607,7 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", format!("{}/collection_request_to_withdraw_v1", callback_url));
+                req = req.header("x-callback-url", format!("{}/collection_request_to_withdraw_v1", callback_url));
             }
         }
 
@@ -651,7 +651,7 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", format!("{}/collection_request_to_withdraw_v2", callback_url));
+                req = req.header("x-callback-url", format!("{}/collection_request_to_withdraw_v2", callback_url));
             }
         }
 
