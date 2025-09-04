@@ -38,9 +38,13 @@ mod tests {
             env::var("MTN_REMITTANCE_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
         let remittance = momo.remittance(primary_key, secondary_key);
 
-        let mut d = CallbackTestHelper::new()
+        let mut callback_helper = CallbackTestHelper::new()
             .await
             .expect("Failed to start callback listener");
+
+        let stream_result = callback_helper.listen().await;
+        assert!(stream_result.is_ok());
+        let mut stream = stream_result.unwrap().boxed();
 
         let payee = Party {
             party_id_type: PartyIdType::MSISDN,
@@ -74,7 +78,7 @@ mod tests {
             .await;
         assert!(res.is_ok());
 
-        if let Some(callback) = d.next().await {
+    if let Some(callback) = stream.next().await {
             if let mtnmomo::CallbackResponse::CashTransferSucceeded { external_id, .. } =
                 callback.response
             {
@@ -104,6 +108,9 @@ mod tests {
                 let mut d = CallbackTestHelper::new()
                     .await
                     .expect("Failed to start callback listener");
+                let stream_result = d.listen().await;
+                assert!(stream_result.is_ok());
+                let mut stream = stream_result.unwrap().boxed();
 
                 let payee = Party {
                     party_id_type: PartyIdType::MSISDN,
@@ -139,7 +146,7 @@ mod tests {
                     .await;
                 assert!(res.is_ok());
 
-                if let Some(callback) = d.next().await {
+                if let Some(callback) = stream.next().await {
                     if let mtnmomo::CallbackResponse::CashTransferFailed {
                         error_reason,
                         external_id,
@@ -235,9 +242,13 @@ mod tests {
             env::var("MTN_REMITTANCE_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
         let remittance = momo.remittance(primary_key, secondary_key);
 
-        let mut d = CallbackTestHelper::new()
+        let mut callback_helper = CallbackTestHelper::new()
             .await
             .expect("Failed to start callback listener");
+
+        let stream_result = callback_helper.listen().await;
+        assert!(stream_result.is_ok());
+        let mut stream = stream_result.unwrap().boxed();
 
         let payee = Party {
             party_id_type: PartyIdType::MSISDN,
@@ -259,7 +270,7 @@ mod tests {
             .await;
         assert!(result.is_ok());
 
-        if let Some(callback) = d.next().await {
+    if let Some(callback) = stream.next().await {
             if let mtnmomo::CallbackResponse::RemittanceTransferSuccess { external_id, .. } =
                 callback.response
             {
@@ -286,9 +297,13 @@ mod tests {
                     env::var("MTN_REMITTANCE_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
                 let remittance = momo.remittance(primary_key, secondary_key);
 
-                let mut d = CallbackTestHelper::new()
+                let mut callback_helper = CallbackTestHelper::new()
                     .await
                     .expect("Failed to start callback listener");
+
+                let stream_result = callback_helper.listen().await;
+                assert!(stream_result.is_ok());
+                let mut stream = stream_result.unwrap().boxed();
 
                 let payee = Party {
                     party_id_type: PartyIdType::MSISDN,
@@ -311,7 +326,7 @@ mod tests {
                     .await;
                 assert!(result.is_ok());
 
-                if let Some(callback) = d.next().await {
+                if let Some(callback) = stream.next().await {
                     if let mtnmomo::CallbackResponse::RemittanceTransferFailed {
                         error_reason,
                         external_id,
@@ -319,7 +334,7 @@ mod tests {
                     } = callback.response
                     {
                         assert_eq!(external_id, transfer.external_id);
-                        assert_eq!(error_reason.code, $expected_reason);
+                        assert_eq!(error_reason, $expected_reason);
                     } else {
                         panic!(
                             "Expected RemittanceTransferFailed callback, got {:?}",
@@ -336,71 +351,71 @@ mod tests {
     test_transfer_failure!(
         test_transfer_payee_failed,
         "46733123450",
-        RequestToPayReason::InternalProcessingError
+        Some(RequestToPayReason::InternalProcessingError)
     );
     test_transfer_failure!(
         test_transfer_payee_rejected,
         "46733123451",
-        RequestToPayReason::APPROVALREJECTED
+        Some(RequestToPayReason::APPROVALREJECTED)
     );
     test_transfer_failure!(
         test_transfer_payee_expired,
         "46733123452",
-        RequestToPayReason::EXPIRED
+        Some(RequestToPayReason::EXPIRED)
     );
     test_transfer_failure!(
         test_transfer_payee_ongoing,
         "46733123453",
-        RequestToPayReason::ONGOING
+        Some(RequestToPayReason::ONGOING)
     );
     test_transfer_failure!(
         test_transfer_payee_delayed,
         "46733123454",
-        RequestToPayReason::PAYERDELAYED
+        Some(RequestToPayReason::PAYERDELAYED)
     );
     test_transfer_failure!(
         test_transfer_payee_not_enough_funds,
         "46733123455",
-        RequestToPayReason::COULDNOTPERFORMTRANSACTION
+        Some(RequestToPayReason::COULDNOTPERFORMTRANSACTION)
     );
     test_transfer_failure!(
         test_transfer_payee_payer_limit_reached,
         "46733123456",
-        RequestToPayReason::COULDNOTPERFORMTRANSACTION
+        Some(RequestToPayReason::COULDNOTPERFORMTRANSACTION)
     );
     test_transfer_failure!(
         test_transfer_payee_not_found,
         "46733123457",
-        RequestToPayReason::PAYERNOTFOUND
+        Some(RequestToPayReason::PAYERNOTFOUND)
     );
     test_transfer_failure!(
         test_transfer_payee_not_allowed,
         "46733123458",
-        RequestToPayReason::NOTALLOWED
+        Some(RequestToPayReason::NOTALLOWED)
     );
     test_transfer_failure!(
         test_transfer_payee_not_allowed_target_environment,
         "46733123459",
-        RequestToPayReason::NOTALLOWEDTARGETENVIRONMENT
+        Some(RequestToPayReason::NOTALLOWEDTARGETENVIRONMENT)
     );
     test_transfer_failure!(
         test_transfer_payee_invalid_callback_url_host,
         "46733123460",
-        RequestToPayReason::INVALIDCALLBACKURLHOST
+        Some(RequestToPayReason::INVALIDCALLBACKURLHOST)
     );
     test_transfer_failure!(
         test_transfer_payee_invalid_currency,
         "46733123461",
-        RequestToPayReason::INVALIDCURRENCY
+        Some(RequestToPayReason::INVALIDCURRENCY)
     );
     test_transfer_failure!(
         test_transfer_payee_internal_processing_error,
         "46733123462",
-        RequestToPayReason::InternalProcessingError
+        Some(RequestToPayReason::InternalProcessingError)
     );
     test_transfer_failure!(
         test_transfer_payee_service_unavailable,
         "46733123463",
-        RequestToPayReason::SERVICEUNAVAILABLE
+        Some(RequestToPayReason::SERVICEUNAVAILABLE)
     );
 }

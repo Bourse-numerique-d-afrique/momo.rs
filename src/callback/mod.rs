@@ -109,11 +109,6 @@ pub enum DisbursementDepositV1FailedStatus {
     FAILED,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum DisbursementDepositV1SuccessStatus {
-    #[serde(rename = "SUCCESSFUL")]
-    SUCCESSFUL,
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum DisbursementDepositV2FailedStatus {
@@ -121,11 +116,7 @@ pub enum DisbursementDepositV2FailedStatus {
     FAILED,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum DisbursementDepositV2SuccessStatus {
-    #[serde(rename = "SUCCESSFUL")]
-    SUCCESSFUL,
-}
+
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum DisbursementRefundV1FailedStatus {
@@ -152,13 +143,13 @@ pub enum DisbursementRefundV2SuccessStatus {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum DisbursementTransferFailedStatus {
+pub enum DisbursementFailedStatus {
     #[serde(rename = "FAILED")]
     FAILED,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum DisbursementTransferSuccessStatus {
+pub enum DisbursementSuccessStatus {
     #[serde(rename = "SUCCESSFUL")]
     SUCCESSFUL,
 }
@@ -211,15 +202,16 @@ pub enum CallbackResponse {
         status: RequestToPaySuccessfulStatus,
     },
 
+
     // pre approval failed callback response
     PreApprovalFailed {
         payer: Party,
         #[serde(rename = "payerCurrency")]
         payer_currency: String,
-        status: PreApprovalFailedStatus,
         #[serde(rename = "expirationDateTime")]
         expiration_date_time: String,
-        reason: Option<Reason>,
+        status: PreApprovalFailedStatus,
+        reason: Option<RequestToPayReason>,
     },
 
     // pre approval success callback response
@@ -398,25 +390,10 @@ pub enum CallbackResponse {
         payer_gender: String,
     },
 
-    // disbursement deposit v1 failed callback response
-    DisbursementDepositV1Failed {
-        #[serde(rename = "financialTransactionId")]
-        financial_transaction_id: String,
-        #[serde(rename = "externalId")]
-        external_id: String,
-        amount: String,
-        currency: String,
-        payee: Party,
-        #[serde(rename = "payeeNote")]
-        payee_note: Option<String>,
-        #[serde(rename = "payerMessage")]
-        payer_message: Option<String>,
-        status: DisbursementDepositV1FailedStatus,
-        reason: Reason,
-    },
+
 
     // disbursement deposit v1 success callback response
-    DisbursementDepositV1Success {
+    DisbursementSuccess {
         #[serde(rename = "financialTransactionId")]
         financial_transaction_id: String,
         #[serde(rename = "externalId")]
@@ -428,7 +405,7 @@ pub enum CallbackResponse {
         payee_note: Option<String>,
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
-        status: DisbursementDepositV1SuccessStatus,
+        status: DisbursementSuccessStatus,
     },
 
     // disbursement deposit v2 failed callback response
@@ -445,24 +422,10 @@ pub enum CallbackResponse {
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
         status: DisbursementDepositV2FailedStatus,
-        reason: Reason,
+        reason: Option<RequestToPayReason>,
     },
 
-    // disbursement deposit v2 success callback response
-    DisbursementDepositV2Success {
-        #[serde(rename = "financialTransactionId")]
-        financial_transaction_id: String,
-        #[serde(rename = "externalId")]
-        external_id: String,
-        amount: String,
-        currency: String,
-        payee: Party,
-        #[serde(rename = "payeeNote")]
-        payee_note: Option<String>,
-        #[serde(rename = "payerMessage")]
-        payer_message: Option<String>,
-        status: DisbursementDepositV2SuccessStatus,
-    },
+
 
     // disbursement refund v1 failed callback response
     DisbursementRefundV1Failed {
@@ -478,7 +441,7 @@ pub enum CallbackResponse {
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
         status: DisbursementRefundV1FailedStatus,
-        reason: Reason,
+        reason: Option<RequestToPayReason>,
     },
 
     // disbursement refund v1 success callback response
@@ -511,7 +474,7 @@ pub enum CallbackResponse {
         #[serde(rename = "payerMessage")]
         payer_message: Option<String>,
         status: DisbursementRefundV2FailedStatus,
-        reason: Reason,
+        reason: Option<RequestToPayReason>,
     },
 
     // disbursement refund v2 success callback response
@@ -531,9 +494,7 @@ pub enum CallbackResponse {
     },
 
     // disbursement transfer failed callback response
-    DisbursementTransferFailed {
-        #[serde(rename = "financialTransactionId")]
-        financial_transaction_id: String,
+    DisbursementFailed {
         #[serde(rename = "externalId")]
         external_id: String,
         amount: String,
@@ -541,26 +502,8 @@ pub enum CallbackResponse {
         payee: Party,
         #[serde(rename = "payeeNote")]
         payee_note: Option<String>,
-        #[serde(rename = "payerMessage")]
-        payer_message: Option<String>,
-        status: DisbursementTransferFailedStatus,
-        reason: Reason,
-    },
-
-    // disbursement transfer success callback response
-    DisbursementTransferSuccess {
-        #[serde(rename = "financialTransactionId")]
-        financial_transaction_id: String,
-        #[serde(rename = "externalId")]
-        external_id: String,
-        amount: String,
-        currency: String,
-        payee: Party,
-        #[serde(rename = "payeeNote")]
-        payee_note: Option<String>,
-        #[serde(rename = "payerMessage")]
-        payer_message: Option<String>,
-        status: DisbursementTransferSuccessStatus,
+        status: DisbursementFailedStatus,
+        reason: Option<RequestToPayReason>,
     },
 
     // remittance transfer failed callback response
@@ -585,7 +528,7 @@ pub enum CallbackResponse {
         #[serde(rename = "payeeNote")]
         payee_note: String,
         #[serde(rename = "errorReason")]
-        error_reason: Reason,
+        error_reason: Option<RequestToPayReason>,
     },
 
     // remittance transfer success callback response

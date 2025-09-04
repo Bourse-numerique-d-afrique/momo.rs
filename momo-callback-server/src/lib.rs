@@ -11,4 +11,5 @@ mod main_impl {
 pub use main_impl::{
     CallbackServerConfig,
     start_callback_server,
+    create_callback_routes,
 };

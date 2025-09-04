@@ -297,7 +297,7 @@ async fn mtn_callback_handler(
 /// # Health check
 /// GET /health
 /// ```
-fn create_callback_routes() -> Route {
+pub fn create_callback_routes() -> Route {
     Route::new()
         .at(
             "/collection_request_to_pay",
@@ -925,7 +925,7 @@ async fn handle_disbursement_callback(update: &MomoUpdates) {
             info!("Disbursement failed - Reference ID: {}, Transaction ID: {}, Reason: {:?}", 
                   reference_id, financial_transaction_id.as_ref().unwrap_or(&"N/A".to_string()), reason);
         }
-        CallbackResponse::DisbursementDepositV1Success {
+        CallbackResponse::DisbursementSuccess {
             external_id,
             financial_transaction_id,
             amount,
@@ -934,28 +934,6 @@ async fn handle_disbursement_callback(update: &MomoUpdates) {
             ..
         } => {
             info!("Disbursement deposit v1 successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
-                  external_id, financial_transaction_id, amount, currency);
-        }
-        CallbackResponse::DisbursementDepositV1Failed {
-            external_id,
-            financial_transaction_id,
-            amount,
-            currency,
-            reason,
-            ..
-        } => {
-            info!("Disbursement deposit v1 failed - External ID: {}, Transaction ID: {}, Amount: {} {}, Reason: {:?}", 
-                  external_id, financial_transaction_id, amount, currency, reason);
-        }
-        CallbackResponse::DisbursementDepositV2Success {
-            external_id,
-            financial_transaction_id,
-            amount,
-            currency,
-            status: _,
-            ..
-        } => {
-            info!("Disbursement deposit v2 successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
                   external_id, financial_transaction_id, amount, currency);
         }
         CallbackResponse::DisbursementDepositV2Failed {
@@ -1013,27 +991,15 @@ async fn handle_disbursement_callback(update: &MomoUpdates) {
             info!("Disbursement refund v2 failed - External ID: {}, Transaction ID: {}, Amount: {} {}, Reason: {:?}", 
                   external_id, financial_transaction_id, amount, currency, reason);
         }
-        CallbackResponse::DisbursementTransferSuccess {
+        CallbackResponse::DisbursementFailed {
             external_id,
-            financial_transaction_id,
-            amount,
-            currency,
-            status: _,
-            ..
-        } => {
-            info!("Disbursement transfer successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
-                  external_id, financial_transaction_id, amount, currency);
-        }
-        CallbackResponse::DisbursementTransferFailed {
-            external_id,
-            financial_transaction_id,
             amount,
             currency,
             reason,
             ..
         } => {
-            info!("Disbursement transfer failed - External ID: {}, Transaction ID: {}, Amount: {} {}, Reason: {:?}", 
-                  external_id, financial_transaction_id, amount, currency, reason);
+            info!("Disbursement transfer failed - External ID: {}, Amount: {} {}, Reason: {:?}", 
+                  external_id, amount, currency, reason);
         }
         _ => {
             info!("Generic disbursement callback: {:?}", update.response);

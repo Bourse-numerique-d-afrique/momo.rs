@@ -27,4 +27,10 @@ pub enum RequestToPayReason {
     SERVICEUNAVAILABLE,
     #[serde(rename = "COULD_NOT_PERFORM_TRANSACTION")]
     COULDNOTPERFORMTRANSACTION,
+    #[serde(rename = "NOT_ENOUGH_FUNDS")]
+    NOTENOUGHFUNDS,
+    #[serde(rename = "PAYEE_NOT_FOUND")]
+    PAYEENOTFOUND,
+    #[serde(rename = "PAYER_LIMIT_REACHED")]
+    PAYERLIMITREACHED,
 }
