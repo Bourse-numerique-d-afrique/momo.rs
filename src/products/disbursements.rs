@@ -355,6 +355,8 @@ impl Disbursements {
         refund: RefundRequest,
         callback_url: Option<&str>,
     ) -> Result<RefundId, Box<dyn std::error::Error>> {
+
+        println!("Refund request: {:?}", serde_json::to_string(&refund)?);
         let client = reqwest::Client::new();
         let refund_id = uuid::Uuid::new_v4().to_string();
         let access_token = self.http_client.get_or_create_token().await?;
@@ -365,15 +367,18 @@ impl Disbursements {
             .header("X-Target-Environment", self.environment.to_string())
             .header("Content-Type", "application/json")
             .header("Ocp-Apim-Subscription-Key", &self.primary_key)
+            .header("Cache-Control", "no-cache")
             .body(serde_json::to_string(&refund)?);
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", format!("{}/disbursement_refund_v1", callback_url));
+                req = req.header("x-callback-url", format!("{}/disbursement_refund_v1", callback_url));
             }
         }
 
         let res = req.send().await?;
+
+        println!("Refund response status: {:?}", res);
 
         if res.status().is_success() {
             Ok(RefundId::new(refund_id))
