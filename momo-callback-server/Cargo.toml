@@ -18,7 +18,7 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "momo-callback-server"
-path = "src/main.rs"
+path = "src/bin/server.rs"
 
 [package.metadata.docs.rs]
 all-features = true

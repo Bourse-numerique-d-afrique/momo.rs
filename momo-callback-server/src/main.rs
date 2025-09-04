@@ -1,18 +1,16 @@
-// MTN MoMo Callback Server - Main executable
+// MTN MoMo Callback Server - Library
 
 use std::error::Error;
 
 use futures_core::Stream;
-use futures_util::StreamExt;
 use poem::listener::TcpListener;
 use poem::middleware::AddData;
 use poem::web::Data;
 use poem::{handler, post, get, Body, Request, Response, Route, Server, EndpointExt};
 use tokio::sync::mpsc::{self, Sender};
 use tracing::{error, info, warn};
-use tracing_subscriber;
 
-use mtnmomo::{CallbackResponse, CallbackType, MomoUpdates};
+use mtnmomo::{CallbackResponse, MomoUpdates};
 
 /// Configuration structure for the MTN MoMo callback server.
 ///
@@ -117,12 +115,6 @@ async fn health_check() -> &'static str {
     "OK"
 }
 
-
-#[handler]
-async fn root_check() -> &'static str {
-    "OK"
-}
-
 /// Primary callback handler for all MTN MoMo callback requests.
 ///
 /// This handler processes incoming callback requests from the MTN MoMo API,
@@ -134,24 +126,18 @@ async fn root_check() -> &'static str {
 /// - `req`: The incoming HTTP request containing headers and metadata
 /// - `body`: The request body containing the JSON callback payload
 /// - `sender`: Channel sender for forwarding parsed callbacks to processors
-/// - `callback_type`: URL parameter indicating the type of callback
 ///
 /// ## Callback Flow
 ///
 /// 1. **Request Reception**: Receives POST request from MTN MoMo API
 /// 2. **Body Extraction**: Reads and converts request body to string
 /// 3. **JSON Parsing**: Attempts to parse body as `CallbackResponse`
-/// 4. **Type Resolution**: Maps callback_type string to `CallbackType` enum
-/// 5. **Channel Forwarding**: Sends parsed callback to processing channel
-/// 6. **Response**: Returns success response to MTN MoMo API
+/// 4. **Channel Forwarding**: Sends parsed callback to processing channel
+/// 5. **Response**: Returns success response to MTN MoMo API
 ///
 /// ## Supported Callback Types
 ///
-/// - `REQUEST_TO_PAY`: Payment request callbacks
-/// - `INVOICE`: Invoice-related callbacks
-/// - `DISBURSEMENT_*`: Disbursement operation callbacks
-/// - `REMITTANCE_*`: Remittance operation callbacks
-/// - And all other MTN MoMo callback types
+/// All MTN MoMo callback types are supported through the `CallbackResponse` enum.
 ///
 /// ## Error Handling
 ///
@@ -167,23 +153,6 @@ async fn root_check() -> &'static str {
 ///   "status": "success",
 ///   "message": "Callback received successfully"
 /// }
-/// ```
-///
-/// ## Examples
-///
-/// The handler processes callbacks like this:
-///
-/// ```bash
-/// # MTN MoMo API sends callback
-/// curl -X POST https://your-server.com/collection_request_to_pay/REQUEST_TO_PAY \
-///   -H "Content-Type: application/json" \
-///   -d '{ 
-///     "financialTransactionId": "123456",
-///     "externalId": "payment-001",
-///     "amount": "100",
-///     "currency": "UGX",
-///     "status": "SUCCESSFUL"
-///   }'
 /// ```
 #[handler]
 async fn mtn_callback_handler(
@@ -232,33 +201,32 @@ async fn mtn_callback_handler(
 ///
 /// ## Route Structure
 ///
-/// All routes follow the pattern: `/{service}_{operation}/{callback_type}`
+/// All routes follow the pattern: `/{service}_{operation}`
 ///
 /// Where:
 /// - `service`: The MTN MoMo service (collection, disbursement, remittance)
 /// - `operation`: The specific operation (request_to_pay, deposit, transfer, etc.)
-/// - `callback_type`: The callback type parameter for the handler
 ///
 /// ## Supported Routes
 ///
 /// ### Collection Service
-/// - `/collection_request_to_pay/{callback_type}`: Payment requests
-/// - `/collection_request_to_withdraw_v1/{callback_type}`: Withdrawal v1
-/// - `/collection_request_to_withdraw_v2/{callback_type}`: Withdrawal v2
-/// - `/collection_invoice/{callback_type}`: Invoice operations
-/// - `/collection_payment/{callback_type}`: Payment operations
-/// - `/collection_preapproval/{callback_type}`: Pre-approval operations
+/// - `/collection_request_to_pay`: Payment requests
+/// - `/collection_request_to_withdraw_v1`: Withdrawal v1
+/// - `/collection_request_to_withdraw_v2`: Withdrawal v2
+/// - `/collection_invoice`: Invoice operations
+/// - `/collection_payment`: Payment operations
+/// - `/collection_preapproval`: Pre-approval operations
 ///
 /// ### Disbursement Service
-/// - `/disbursement_deposit_v1/{callback_type}`: Deposit v1 operations
-/// - `/disbursement_deposit_v2/{callback_type}`: Deposit v2 operations
-/// - `/disbursement_refund_v1/{callback_type}`: Refund v1 operations
-/// - `/disbursement_refund_v2/{callback_type}`: Refund v2 operations
-/// - `/disbursement_transfer/{callback_type}`: Transfer operations
+/// - `/disbursement_deposit_v1`: Deposit v1 operations
+/// - `/disbursement_deposit_v2`: Deposit v2 operations
+/// - `/disbursement_refund_v1`: Refund v1 operations
+/// - `/disbursement_refund_v2`: Refund v2 operations
+/// - `/disbursement_transfer`: Transfer operations
 ///
 /// ### Remittance Service
-/// - `/remittance_cash_transfer/{callback_type}`: Cash transfers
-/// - `/remittance_transfer/{callback_type}`: Regular transfers
+/// - `/remittance_cash_transfer`: Cash transfers
+/// - `/remittance_transfer`: Regular transfers
 ///
 /// ### Utility Routes
 /// - `/health`: Health check endpoint (GET)
@@ -357,9 +325,6 @@ pub fn create_callback_routes() -> Route {
         .at("/health", get(health_check))
 }
 
-
-
-
 /// Starts the MTN MoMo callback server with the specified configuration.
 ///
 /// This is the main function that initializes and starts the callback server. It creates
@@ -413,7 +378,7 @@ pub fn create_callback_routes() -> Route {
 ///     println!("Server started, processing callbacks...");
 ///
 ///     while let Some(callback) = callback_stream.next().await {
-///         println!("Received callback: {:?}", callback.update_type);
+///         println!("Received callback: {:?}", callback.response);
 ///         // Process the callback according to your business logic
 ///     }
 ///
@@ -527,733 +492,4 @@ pub async fn start_callback_server(
             yield msg;
         }
     })
-}
-
-#[tokio::main]
-#[allow(dead_code)]
-async fn main() -> Result<(), Box<dyn Error>> {
-    // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .init();
-
-    info!("MTN MoMo Callback Server starting...");
-
-    // Load configuration
-    let config = CallbackServerConfig::default();
-
-    // Start the callback server
-    let callback_stream = start_callback_server(config).await?;
-    
-    info!("Server is running. Press Ctrl+C to stop.");
-    
-    // Process incoming callbacks
-    use futures_util::pin_mut;
-    pin_mut!(callback_stream);
-    while let Some(update) = callback_stream.next().await {
-        info!("From: {}", update.remote_address);
-        
-        // Here you can add custom business logic to handle different callback types
-        info!("Callback Type: {:?}", update.response);
-    }
-
-    Ok(())
-}
-
-/// Handles payment-related callbacks with custom business logic.
-///
-/// This function processes callbacks related to payment operations, including
-/// successful payments, failed payments, and payment status updates. It extracts
-/// relevant information from the callback response and provides hooks for
-/// implementing custom business logic.
-///
-/// ## Parameters
-///
-/// - `update`: The callback update containing payment information and metadata
-///
-/// ## Supported Callback Types
-///
-/// - **RequestToPaySuccess**: Successful payment completion
-/// - **RequestToPayFailed**: Failed payment with reason
-///
-/// ## Business Logic Integration
-///
-/// This function provides hooks for implementing payment processing logic:
-///
-/// ### Successful Payments
-/// - Update database records
-/// - Send confirmation notifications
-/// - Process order fulfillment
-/// - Update user balances
-/// - Generate receipts
-///
-/// ### Failed Payments
-/// - Handle refunds if applicable
-/// - Notify users of failure
-/// - Log for investigation
-/// - Update payment status
-/// - Trigger retry mechanisms
-///
-/// ## Examples
-///
-/// ### Database Integration
-///
-/// ```rust,no_run
-/// // Example of extending this function for database updates
-/// async fn handle_payment_callback(update: &MomoUpdates) {
-///     match &update.response {
-///         CallbackResponse::RequestToPaySuccess { external_id, amount, currency, .. } => {
-///             // Update payment status in database
-///             database::update_payment_status(external_id, "completed").await;
-///             
-///             // Send confirmation email
-///             email::send_payment_confirmation(external_id, amount, currency).await;
-///             
-///             // Process order if this was a purchase
-///             orders::fulfill_order(external_id).await;
-///         }
-///         CallbackResponse::RequestToPayFailed { external_id, reason, .. } => {
-///             // Update payment status
-///             database::update_payment_status(external_id, "failed").await;
-///             
-///             // Log failure for analysis
-///             analytics::log_payment_failure(external_id, reason).await;
-///             
-///             // Notify user
-///             notifications::send_failure_notification(external_id, reason).await;
-///         }
-///         _ => {}
-///     }
-/// }
-/// ```
-///
-/// ### Webhook Forwarding
-///
-/// ```rust,no_run
-/// // Example of forwarding callbacks to other services
-/// async fn handle_payment_callback(update: &MomoUpdates) {
-///     let webhook_payload = serde_json::to_string(&update.response)?;
-///     
-///     // Forward to internal accounting service
-///     http_client
-///         .post("http://accounting-service/payments/callback")
-///         .body(webhook_payload)
-///         .send()
-///         .await?;
-/// }
-/// ```
-///
-/// ## Error Handling
-///
-/// This function should handle errors gracefully to avoid affecting
-/// the callback server's stability:
-///
-/// ```rust,no_run
-/// async fn handle_payment_callback(update: &MomoUpdates) {
-///     match process_payment(update).await {
-///         Ok(_) => info!("Payment processed successfully"),
-///         Err(e) => {
-///             error!("Failed to process payment: {}", e);
-///             // Don't panic - log and continue
-///         }
-///     }
-/// }
-/// ```
-#[allow(dead_code)]
-async fn handle_payment_callback(update: &MomoUpdates) {
-    info!("Payment callback processing started");
-    
-    // Extract payment information based on callback response variant
-    match &update.response {
-        CallbackResponse::RequestToPaySuccess {
-            external_id,
-            status: _,
-            financial_transaction_id,
-            amount,
-            currency,
-            ..
-        } => {
-            info!("Payment successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
-                  external_id, financial_transaction_id, amount, currency);
-            // Add your success handling logic here
-            // e.g., update database, send notifications, etc.
-        }
-        CallbackResponse::RequestToPayFailed {
-            external_id,
-            status: _,
-            reason,
-            amount,
-            currency,
-            ..
-        } => {
-            info!("Payment failed - External ID: {}, Reason: {:?}, Amount: {} {}", 
-                  external_id, reason, amount, currency);
-            // Add your failure handling logic here
-            // e.g., handle refunds, notify user, etc.
-        }
-        _ => {
-            warn!("Received non-payment callback in payment handler: {:?}", update.response);
-        }
-    }
-}
-
-/// Handles invoice-related callbacks with custom business logic.
-///
-/// This function processes callbacks for invoice operations, including successful
-/// invoice payments and failed invoice attempts. It provides integration points
-/// for implementing custom invoice management logic.
-///
-/// ## Parameters
-///
-/// - `update`: The callback update containing invoice information and metadata
-///
-/// ## Supported Callback Types
-///
-/// - **InvoiceSucceeded**: Invoice payment completed successfully
-/// - **InvoiceFailed**: Invoice payment failed with error reason
-///
-/// ## Business Logic Integration
-///
-/// ### Successful Invoice Payments
-/// - Mark invoice as paid in database
-/// - Send payment confirmation to customer
-/// - Update accounting records
-/// - Trigger order processing
-/// - Generate payment receipts
-///
-/// ### Failed Invoice Payments
-/// - Update invoice status to failed
-/// - Send payment failure notification
-/// - Log failure for analysis
-/// - Trigger reminder workflows
-/// - Update payment retry attempts
-///
-/// ## Examples
-///
-/// ```rust,no_run
-/// async fn handle_invoice_callback(update: &MomoUpdates) {
-///     match &update.response {
-///         CallbackResponse::InvoiceSucceeded { 
-///             external_id, 
-///             reference_id, 
-///             amount, 
-///             currency,
-///             .. 
-///         } => {
-///             // Update invoice status in database
-///             database::mark_invoice_paid(external_id, reference_id).await;
-///             
-///             // Send confirmation to customer
-///             email::send_invoice_payment_confirmation(
-///                 external_id, 
-///                 amount, 
-///                 currency
-///             ).await;
-///             
-///             // Update accounting system
-///             accounting::record_invoice_payment(
-///                 external_id, 
-///                 amount, 
-///                 currency
-///             ).await;
-///         }
-///         CallbackResponse::InvoiceFailed { 
-///             external_id, 
-///             reference_id, 
-///             error_reason,
-///             .. 
-///         } => {
-///             // Update invoice status
-///             database::mark_invoice_failed(external_id, erron_reason).await;
-///             
-///             // Send failure notification
-///             email::send_invoice_payment_failure(
-///                 external_id, 
-///                 erron_reason
-///             ).await;
-///             
-///             // Schedule retry if appropriate
-///             if should_retry_invoice(erron_reason) {
-///                 retry_service::schedule_invoice_retry(external_id).await;
-///             }
-///         }
-///         _ => {
-///             warn!("Unexpected callback type in invoice handler");
-///         }
-///     }
-/// }
-/// ```
-#[allow(dead_code)]
-async fn handle_invoice_callback(update: &MomoUpdates) {
-    info!("Invoice callback processing started");
-    
-    // Handle invoice-specific callback variants
-    match &update.response {
-        CallbackResponse::InvoiceSucceeded {
-            external_id,
-            reference_id,
-            status: _,
-            amount,
-            currency,
-            ..
-        } => {
-            info!("Invoice successful - External ID: {}, Reference ID: {}, Amount: {} {}", 
-                  external_id, reference_id, amount, currency);
-            // e.g., update invoice status in database
-        }
-        CallbackResponse::InvoiceFailed {
-            external_id,
-            reference_id,
-            status: _,
-            error_reason,
-            ..
-        } => {
-            info!("Invoice failed - External ID: {}, Reference ID: {}, Reason: {:?}", 
-                  external_id, reference_id, error_reason);
-            // e.g., handle invoice failure
-        }
-        _ => {
-            warn!("Received non-invoice callback in invoice handler: {:?}", update.response);
-        }
-    }
-}
-
-/// Handles disbursement-related callbacks with custom business logic.
-///
-/// This function processes callbacks for disbursement operations, including successful
-/// disbursements and failed disbursement attempts. Disbursements typically involve
-/// sending money from the merchant account to end users or other parties.
-///
-/// ## Parameters
-///
-/// - `update`: The callback update containing disbursement information and metadata
-///
-/// ## Supported Callback Types
-///
-/// - **PaymentSucceeded**: Disbursement completed successfully
-/// - **PaymentFailed**: Disbursement failed with reason
-///
-/// ## Business Logic Integration
-///
-/// ### Successful Disbursements
-/// - Update disbursement status in database
-/// - Send confirmation notifications to recipients
-/// - Update account balances
-/// - Generate disbursement receipts
-/// - Log transaction for audit
-///
-/// ### Failed Disbursements
-/// - Mark disbursement as failed
-/// - Notify administrators of failure
-/// - Log for investigation
-/// - Handle retry logic if appropriate
-/// - Refund source account if necessary
-///
-/// ## Examples
-///
-/// ```rust,no_run
-/// async fn handle_disbursement_callback(update: &MomoUpdates) {
-///     match &update.response {
-///         CallbackResponse::PaymentSucceeded { 
-///             reference_id, 
-///             financial_transaction_id, 
-///             .. 
-///         } => {
-///             // Update disbursement record
-///             database::update_disbursement_status(
-///                 reference_id, 
-///                 "completed"
-///             ).await;
-///             
-///             // Send confirmation
-///             notifications::send_disbursement_confirmation(
-///                 reference_id,
-///                 financial_transaction_id
-///             ).await;
-///             
-///             // Update account balance
-///             accounts::update_balance_after_disbursement(
-///                 reference_id
-///             ).await;
-///         }
-///         CallbackResponse::PaymentFailed { 
-///             reference_id, 
-///             reason, 
-///             .. 
-///         } => {
-///             // Handle failed disbursement
-///             database::mark_disbursement_failed(
-///                 reference_id, 
-///                 reason
-///             ).await;
-///             
-///             // Notify administrators
-///             notifications::alert_disbursement_failure(
-///                 reference_id, 
-///                 reason
-///             ).await;
-///             
-///             // Potentially refund source account
-///             accounts::refund_failed_disbursement(
-///                 reference_id
-///             ).await;
-///         }
-///         _ => {}
-///     }
-/// }
-/// ```
-#[allow(dead_code)]
-async fn handle_disbursement_callback(update: &MomoUpdates) {
-    info!("Disbursement callback processing started");
-    
-    // Handle disbursement-specific callback variants
-    match &update.response {
-        CallbackResponse::PaymentSucceeded {
-            reference_id,
-            status: _,
-            financial_transaction_id,
-        } => {
-            info!("Disbursement successful - Reference ID: {}, Transaction ID: {}", 
-                  reference_id, financial_transaction_id.as_ref().unwrap_or(&"N/A".to_string()));
-        }
-        CallbackResponse::PaymentFailed {
-            reference_id,
-            status: _,
-            financial_transaction_id,
-            reason,
-        } => {
-            info!("Disbursement failed - Reference ID: {}, Transaction ID: {}, Reason: {:?}", 
-                  reference_id, financial_transaction_id.as_ref().unwrap_or(&"N/A".to_string()), reason);
-        }
-        CallbackResponse::DisbursementSuccess {
-            external_id,
-            financial_transaction_id,
-            amount,
-            currency,
-            status: _,
-            ..
-        } => {
-            info!("Disbursement deposit v1 successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
-                  external_id, financial_transaction_id, amount, currency);
-        }
-        CallbackResponse::DisbursementDepositV2Failed {
-            external_id,
-            financial_transaction_id,
-            amount,
-            currency,
-            reason,
-            ..
-        } => {
-            info!("Disbursement deposit v2 failed - External ID: {}, Transaction ID: {}, Amount: {} {}, Reason: {:?}", 
-                  external_id, financial_transaction_id, amount, currency, reason);
-        }
-        CallbackResponse::DisbursementRefundV1Success {
-            external_id,
-            financial_transaction_id,
-            amount,
-            currency,
-            status: _,
-            ..
-        } => {
-            info!("Disbursement refund v1 successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
-                  external_id, financial_transaction_id, amount, currency);
-        }
-        CallbackResponse::DisbursementRefundV1Failed {
-            external_id,
-            financial_transaction_id,
-            amount,
-            currency,
-            reason,
-            ..
-        } => {
-            info!("Disbursement refund v1 failed - External ID: {}, Transaction ID: {}, Amount: {} {}, Reason: {:?}", 
-                  external_id, financial_transaction_id, amount, currency, reason);
-        }
-        CallbackResponse::DisbursementRefundV2Success {
-            external_id,
-            financial_transaction_id,
-            amount,
-            currency,
-            status: _,
-            ..
-        } => {
-            info!("Disbursement refund v2 successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
-                  external_id, financial_transaction_id, amount, currency);
-        }
-        CallbackResponse::DisbursementRefundV2Failed {
-            external_id,
-            financial_transaction_id,
-            amount,
-            currency,
-            reason,
-            ..
-        } => {
-            info!("Disbursement refund v2 failed - External ID: {}, Transaction ID: {}, Amount: {} {}, Reason: {:?}", 
-                  external_id, financial_transaction_id, amount, currency, reason);
-        }
-        CallbackResponse::DisbursementFailed {
-            external_id,
-            amount,
-            currency,
-            reason,
-            ..
-        } => {
-            info!("Disbursement transfer failed - External ID: {}, Amount: {} {}, Reason: {:?}", 
-                  external_id, amount, currency, reason);
-        }
-        _ => {
-            info!("Generic disbursement callback: {:?}", update.response);
-        }
-    }
-}
-
-/// Handles remittance-related callbacks with custom business logic.
-///
-/// This function processes callbacks for remittance operations, including successful
-/// money transfers and failed transfer attempts. Remittances typically involve
-/// cross-border money transfers and cash pickup services.
-///
-/// ## Parameters
-///
-/// - `update`: The callback update containing remittance information and metadata
-///
-/// ## Supported Callback Types
-///
-/// - **CashTransferSucceeded**: Remittance completed successfully
-/// - **CashTransferFailed**: Remittance failed with error details
-///
-/// ## Business Logic Integration
-///
-/// ### Successful Remittances
-/// - Update transfer status in database
-/// - Send confirmation to sender and recipient
-/// - Update exchange rates if applicable
-/// - Generate transfer receipts
-/// - Notify recipient of available funds
-///
-/// ### Failed Remittances
-/// - Mark transfer as failed
-/// - Notify sender of failure
-/// - Refund sender if money was already debited
-/// - Log for compliance and investigation
-/// - Handle retry mechanisms
-///
-/// ## Examples
-///
-/// ```rust,no_run
-/// async fn handle_remittance_callback(update: &MomoUpdates) {
-///     match &update.response {
-///         CallbackResponse::CashTransferSucceeded {
-///             external_id,
-///             financial_transaction_id,
-///             amount,
-///             currency,
-///             payee,
-///             originating_country,
-///             ..
-///         } => {
-///             // Update transfer status
-///             database::complete_remittance_transfer(
-///                 external_id,
-///                 financial_transaction_id
-///             ).await;
-///             
-///             // Notify recipient
-///             sms::send_pickup_notification(
-///                 &payee.party_id,
-///                 amount,
-///                 currency
-///             ).await;
-///             
-///             // Send confirmation to sender
-///             email::send_transfer_confirmation(
-///                 external_id,
-///                 amount,
-///                 currency,
-///                 originating_country
-///             ).await;
-///             
-///             // Update compliance records
-///             compliance::log_successful_transfer(
-///                 external_id,
-///                 amount,
-///                 originating_country
-///             ).await;
-///         }
-///         CallbackResponse::CashTransferFailed {
-///             external_id,
-///             error_reason,
-///             amount,
-///             currency,
-///             ..
-///         } => {
-///             // Handle failed transfer
-///             database::mark_remittance_failed(
-///                 external_id,
-///                 error_reason
-///             ).await;
-///             
-///             // Refund sender
-///             refunds::process_remittance_refund(
-///                 external_id,
-///                 amount,
-///                 currency
-///             ).await;
-///             
-///             // Notify sender of failure
-///             notifications::send_transfer_failure_notice(
-///                 external_id,
-///                 error_reason
-///             ).await;
-///         }
-///         _ => {}
-///     }
-/// }
-/// ```
-#[allow(dead_code)]
-async fn handle_remittance_callback(update: &MomoUpdates) {
-    info!("Remittance callback processing started");
-    
-    // Handle remittance-specific callback variants
-    match &update.response {
-        CallbackResponse::CashTransferSucceeded {
-            external_id,
-            financial_transaction_id,
-            status: _,
-            amount,
-            currency,
-            ..
-        } => {
-            info!("Remittance cash transfer successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
-                  external_id, financial_transaction_id, amount, currency);
-        }
-        CallbackResponse::CashTransferFailed {
-            external_id,
-            financial_transaction_id,
-            status: _,
-            amount,
-            currency,
-            error_reason,
-            ..
-        } => {
-            info!("Remittance cash transfer failed - External ID: {}, Transaction ID: {}, Amount: {} {}, Reason: {:?}", 
-                  external_id, financial_transaction_id, amount, currency, error_reason);
-        }
-        CallbackResponse::RemittanceTransferSuccess {
-            external_id,
-            financial_transaction_id,
-            status: _,
-            amount,
-            currency,
-            ..
-        } => {
-            info!("Remittance transfer successful - External ID: {}, Transaction ID: {}, Amount: {} {}", 
-                  external_id, financial_transaction_id, amount, currency);
-        }
-        CallbackResponse::RemittanceTransferFailed {
-            external_id,
-            financial_transaction_id,
-            status: _,
-            amount,
-            currency,
-            error_reason,
-            ..
-        } => {
-            info!("Remittance transfer failed - External ID: {}, Transaction ID: {}, Amount: {} {}, Reason: {:?}", 
-                  external_id, financial_transaction_id, amount, currency, error_reason);
-        }
-        _ => {
-            info!("Generic remittance callback: {:?}", update.response);
-        }
-    }
-}
-
-/// Handles generic callbacks that don't fit into specific category handlers.
-///
-/// This function serves as a catch-all handler for callback types that don't have
-/// dedicated processing logic or for handling edge cases and future callback types
-/// that may be added to the MTN MoMo API.
-///
-/// ## Parameters
-///
-/// - `update`: The callback update containing callback information and metadata
-///
-/// ## Use Cases
-///
-/// - Processing new callback types during API evolution
-/// - Handling edge cases not covered by specific handlers
-/// - Logging and monitoring unknown callback patterns
-/// - Debugging and development purposes
-/// - Fallback processing for unclassified callbacks
-///
-/// ## Business Logic Integration
-///
-/// ### Logging and Monitoring
-/// - Log all callback details for analysis
-/// - Send metrics to monitoring systems
-/// - Alert on unknown callback types
-/// - Track callback volumes and patterns
-///
-/// ### Future-Proofing
-/// - Handle new MTN MoMo callback types gracefully
-/// - Provide extension points for custom logic
-/// - Maintain backward compatibility
-/// - Support A/B testing of new features
-///
-/// ## Examples
-///
-/// ```rust,no_run
-/// async fn handle_generic_callback(update: &MomoUpdates) {
-///     // Log comprehensive callback information
-///     info!("Generic callback received");
-///     info!("Type: {:?}", update.update_type);
-///     info!("From: {}", update.remote_address);
-///     info!("Response: {:?}", update.response);
-///     
-///     // Send to analytics/monitoring
-///     analytics::track_callback_event({
-///         "type": update.update_type,
-///         "source": update.remote_address,
-///         "timestamp": chrono::Utc::now(),
-///     }).await;
-///     
-///     // Store for later analysis
-///     database::store_unknown_callback({
-///         update.clone()
-///     }).await;
-///     
-///     // Alert if this is a new callback type we haven't seen
-///     if is_new_callback_type(&update.update_type) {
-///         alerts::send_new_callback_type_alert(
-///             &update.update_type
-///         ).await;
-///     }
-///     
-///     // Forward to external systems if needed
-///     webhook::forward_to_external_handler(update).await;
-/// }
-/// ```
-///
-/// ## Error Handling
-///
-/// This handler should be extremely robust since it processes unknown data:
-///
-/// ```rust,no_run
-/// async fn handle_generic_callback(update: &MomoUpdates) {
-///     // Always wrap in error handling
-///     match process_generic_callback(update).await {
-///         Ok(_) => info!("Generic callback processed successfully"),
-///         Err(e) => {
-///             error!("Failed to process generic callback: {}", e);
-///             // Don't panic - continue processing other callbacks
-///         }
-///     }
-/// }
-/// ```
-#[allow(dead_code)]
-async fn handle_generic_callback(update: &MomoUpdates) {
-    info!("Generic callback processing started");
-    info!("Generic callback received: {:?}", update.response);
-
-    // Add your generic callback processing logic here
 }

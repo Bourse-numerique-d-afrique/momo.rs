@@ -8,9 +8,10 @@ A standalone HTTP callback server for handling MTN MoMo payment callbacks. This 
   - **Collection**: Request to pay, invoices, withdrawals, pre-approvals
   - **Disbursements**: Deposits, refunds, transfers
   - **Remittances**: Cash transfers, transfers
-- **-pills Health Monitoring**: Built-in `/health` endpoint for uptime checks
+- **🩺 Health Monitoring**: Built-in `/health` endpoint for uptime checks
 - **🛡️ Production Ready**: Graceful shutdown, structured logging, comprehensive error handling
-- **🔧 Custom Business Logic**: Easy-to-extend callback handlers for your specific needs
+- **🔧 Library and Binary**: Can be used as both a standalone binary and a library component
+- **🔌 Stream-based Processing**: Process callbacks as a stream for easy integration
 
 ## Quick Start
 
@@ -34,6 +35,28 @@ cargo build --release
 ./target/release/momo-callback-server
 ```
 
+Or if using as a library in your own application:
+
+```rust
+use momo_callback_server::{CallbackServerConfig, start_callback_server};
+use futures_util::StreamExt;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = CallbackServerConfig::default();
+    let mut callback_stream = start_callback_server(config).await?;
+
+    println!("Server started, processing callbacks...");
+
+    while let Some(callback) = callback_stream.next().await {
+        println!("Received callback: {:?}", callback.response);
+        // Process the callback according to your business logic
+    }
+
+    Ok(())
+}
+```
+
 ### 3. Test the Server
 
 ```bash
@@ -44,7 +67,18 @@ curl http://127.0.0.1:8500/health
 
 ## Configuration
 
-The server runs on localhost:8500 by default. For production deployments, use a reverse proxy like Caddy2 to handle TLS termination.
+The server runs on localhost:8500 by default. You can customize the configuration:
+
+```rust
+use momo_callback_server::CallbackServerConfig;
+
+let config = CallbackServerConfig {
+    http_port: 8500,
+    host: "127.0.0.1".to_string(),
+};
+```
+
+For production deployments, use a reverse proxy like Caddy2 to handle TLS termination.
 
 ## API Endpoints
 
@@ -53,26 +87,26 @@ The server runs on localhost:8500 by default. For production deployments, use a 
 
 ### Callback Endpoints
 
-All callback endpoints accept POST requests:
+All callback endpoints accept POST and PUT requests:
 
 #### Collection Callbacks
-- `POST /collection_request_to_pay`
-- `POST /collection_request_to_withdraw_v1`
-- `POST /collection_request_to_withdraw_v2`
-- `POST /collection_invoice`
-- `POST /collection_payment`
-- `POST /collection_preapproval`
+- `POST/PUT /collection_request_to_pay`
+- `POST/PUT /collection_request_to_withdraw_v1`
+- `POST/PUT /collection_request_to_withdraw_v2`
+- `POST/PUT /collection_invoice`
+- `POST/PUT /collection_payment`
+- `POST/PUT /collection_preapproval`
 
 #### Disbursement Callbacks
-- `POST /disbursement_deposit_v1`
-- `POST /disbursement_deposit_v2`
-- `POST /disbursement_refund_v1`
-- `POST /disbursement_refund_v2`
-- `POST /disbursement_transfer`
+- `POST/PUT /disbursement_deposit_v1`
+- `POST/PUT /disbursement_deposit_v2`
+- `POST/PUT /disbursement_refund_v1`
+- `POST/PUT /disbursement_refund_v2`
+- `POST/PUT /disbursement_transfer`
 
 #### Remittance Callbacks
-- `POST /remittance_cash_transfer`
-- `POST /remittance_transfer`
+- `POST/PUT /remittance_cash_transfer`
+- `POST/PUT /remittance_transfer`
 
 ## Usage with MTN MoMo API
 
@@ -88,47 +122,47 @@ let result = collection.request_to_pay(request, Some(callback_url)).await;
 
 ## Custom Business Logic
 
-The server includes dedicated handlers for different callback types. You can modify these in `src/main.rs`:
+The server returns a stream of `MomoUpdates` that you can process in your application:
 
-### Payment Callbacks
 ```rust
-async fn handle_payment_callback(update: &MomoUpdates) {
-    match &update.response {
-        CallbackResponse::RequestToPaySuccess { external_id, amount, currency, .. } => {
-            // Handle successful payment
-            println!("Payment successful: {} {}", amount, currency);
-            // Add your business logic here:
-            // - Update database
-            // - Send notifications
-            // - Process orders
-        }
-        CallbackResponse::RequestToPayFailed { external_id, reason, .. } => {
-            // Handle failed payment
-            println!("Payment failed: {:?}", reason);
-            // Add your failure handling:
-            // - Handle refunds
-            // - Notify user
-            // - Log for investigation
-        }
-        _ => {}
-    }
-}
-```
+use momo_callback_server::{CallbackServerConfig, start_callback_server};
+use mtnmomo::CallbackResponse;
+use futures_util::StreamExt;
 
-### Invoice Callbacks
-```rust
-async fn handle_invoice_callback(update: &MomoUpdates) {
-    match &update.response {
-        CallbackResponse::InvoiceSucceeded { external_id, reference_id, .. } => {
-            // Handle successful invoice payment
-            // Update invoice status, notify customer, etc.
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = CallbackServerConfig::default();
+    let mut callback_stream = start_callback_server(config).await?;
+
+    while let Some(update) = callback_stream.next().await {
+        match &update.response {
+            CallbackResponse::RequestToPaySuccess { 
+                external_id, 
+                amount, 
+                currency, 
+                .. 
+            } => {
+                // Handle successful payment
+                println!("Payment successful: {} {} {}", external_id, amount, currency);
+                // Add your business logic here
+            }
+            CallbackResponse::RequestToPayFailed { 
+                external_id, 
+                reason, 
+                .. 
+            } => {
+                // Handle failed payment
+                println!("Payment failed: {} {:?}", external_id, reason);
+                // Add your failure handling
+            }
+            _ => {
+                // Handle other callback types
+                println!("Received callback: {:?}", update.response);
+            }
         }
-        CallbackResponse::InvoiceFailed { external_id, error_reason, .. } => {
-            // Handle failed invoice
-            // Send reminder, update status, etc.
-        }
-        _ => {}
     }
+
+    Ok(())
 }
 ```
 
@@ -147,9 +181,8 @@ The server provides comprehensive logging:
 When callbacks are received:
 ```
 2024-01-15T10:31:20.456Z INFO [momo_callback_server] Received callback from 192.168.1.100
-2024-01-15T10:31:20.457Z INFO [momo_callback_server] Successfully processed callback
-2024-01-15T10:31:20.458Z INFO [momo_callback_server] Processing callback: RequestToPay
-2024-01-15T10:31:20.459Z INFO [momo_callback_server] Payment successful - External ID: abc123, Amount: 100 UGX
+2024-01-15T10:31:20.457Z INFO [momo_callback_server] Raw callback body: {"financialTransactionId":"123456","externalId":"test-payment-001","amount":"100","currency":"UGX","status":"SUCCESSFUL"}
+2024-01-15T10:31:20.458Z INFO [momo_callback_server] Successfully processed callback
 ```
 
 ## Production Deployment
@@ -208,6 +241,7 @@ your-domain.com {
 - **Request Logging**: All callback requests are logged for audit
 - **JSON Validation**: Validates callback payloads from MTN MoMo
 - **Error Handling**: Failed callbacks are logged with detailed error information
+- **CORS Support**: Built-in CORS middleware for web integration
 
 ## Troubleshooting
 
@@ -253,16 +287,54 @@ curl -X POST http://127.0.0.1:8500/collection_request_to_pay \
 ### Adding New Callback Types
 
 1. Update the `CallbackResponse` enum in the mtnmomo library
-2. Add handling in the appropriate callback handler function
+2. Add handling in your callback processing code
 3. Test with the new callback type
 
 ### Custom Middleware
 
-Add custom middleware to the server:
+Add custom middleware when using as a library:
 
 ```rust
-// In create_callback_routes()
-.with(your_custom_middleware())
+use momo_callback_server::create_callback_routes;
+use poem::{Route, Server};
+
+let app = create_callback_routes()
+    .with(poem::middleware::Tracing::default())
+    .with(poem::middleware::Cors::new())
+    .with(poem::middleware::Compression::default())
+    .with(poem::middleware::RequestId::default())
+    // Add your custom middleware here
+    .with(your_custom_middleware());
+```
+
+## Library Usage
+
+The callback server can be used as a library component in your own applications:
+
+```rust
+use momo_callback_server::{CallbackServerConfig, start_callback_server};
+use futures_util::StreamExt;
+
+async fn run_callback_server() -> Result<(), Box<dyn std::error::Error>> {
+    let config = CallbackServerConfig::default();
+    let mut callback_stream = start_callback_server(config).await?;
+    
+    tokio::spawn(async move {
+        while let Some(callback) = callback_stream.next().await {
+            // Process callbacks in a separate task
+            tokio::spawn(async move {
+                process_callback(callback).await;
+            });
+        }
+    });
+    
+    Ok(())
+}
+
+async fn process_callback(callback: mtnmomo::MomoUpdates) {
+    // Your callback processing logic here
+    println!("Processing callback from: {}", callback.remote_address);
+}
 ```
 
 ## License
