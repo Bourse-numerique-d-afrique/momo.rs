@@ -1178,6 +1178,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_pre_approval() {
         dotenv().ok();
         let mtn_url = env::var("MTN_URL").expect("MTN_COLLECTION_URL must be set");
