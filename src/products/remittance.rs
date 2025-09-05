@@ -74,7 +74,6 @@ impl Remittance {
         }
     }
 
-
     /// This operation is used to create an OAuth2 token
     ///
     /// # Parameters
@@ -132,7 +131,6 @@ impl Remittance {
         .await
     }
 
-
     /// Cash transfer operation is used to transfer an amount from the owner’s account to a payee account.
     /// Status of the transaction can be validated by using GET /cashtransfer/{referenceId}
     ///
@@ -161,7 +159,10 @@ impl Remittance {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", format!("{}/remittance_cash_transfer", callback_url));
+                req = req.header(
+                    "X-Callback-Url",
+                    format!("{}/remittance_cash_transfer", callback_url),
+                );
             }
         }
 
@@ -238,7 +239,10 @@ impl Remittance {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", format!("{}/remittance_transfer", callback_url));
+                req = req.header(
+                    "X-Callback-Url",
+                    format!("{}/remittance_transfer", callback_url),
+                );
             }
         }
 

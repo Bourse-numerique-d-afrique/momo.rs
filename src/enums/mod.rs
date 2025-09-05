@@ -4,6 +4,6 @@ pub mod currency;
 pub mod environment;
 pub mod party_id_type;
 pub mod payer_identification_type;
+pub mod pre_approval_status;
 pub mod reason;
 pub mod request_to_pay_status;
-pub mod pre_approval_status;

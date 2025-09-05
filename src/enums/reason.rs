@@ -33,4 +33,6 @@ pub enum RequestToPayReason {
     PAYEENOTFOUND,
     #[serde(rename = "PAYER_LIMIT_REACHED")]
     PAYERLIMITREACHED,
+    #[serde(rename = "PAYEE_DELAYED")]
+    PAYEEDELAYED,
 }

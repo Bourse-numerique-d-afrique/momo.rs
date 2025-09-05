@@ -144,11 +144,11 @@ mod tests {
         let provisioning = Provisioning::new(mtn_url, subscription_key);
         let reference_id = Uuid::new_v4().to_string();
         let result = provisioning.create_sandox(&reference_id, "test").await;
-        assert_eq!(result.is_ok(), true);
+        assert!(result.is_ok());
         let resullt = provisioning.get_api_information(&reference_id).await;
-        assert_eq!(resullt.is_ok(), true);
+        assert!(resullt.is_ok());
         let result = provisioning.create_api_information(&reference_id).await;
         let api_key = result.unwrap();
-        assert_eq!(api_key.clone().api_key.len() > 0, true);
+        assert!(!api_key.clone().api_key.is_empty());
     }
 }

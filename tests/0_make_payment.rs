@@ -1,12 +1,17 @@
 mod common;
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "skip-integration-tests")))]
 mod tests {
     use crate::common::CallbackTestHelper;
     use futures_core::Stream;
     use futures_util::StreamExt;
     use mtnmomo::{
-        callback::{PreApprovalCreatedStatus, PreApprovalSuccessfulStatus, RequestToPayFailedStatus, RequestToPaySuccessfulStatus}, enums::reason::RequestToPayReason, Currency, Momo, MomoUpdates, Party, PartyIdType, PreApprovalRequest, RequestToPay
+        callback::{
+            PreApprovalCreatedStatus, PreApprovalSuccessfulStatus, RequestToPayFailedStatus,
+            RequestToPaySuccessfulStatus,
+        },
+        enums::reason::RequestToPayReason,
+        Currency, Momo, MomoUpdates, Party, PartyIdType, PreApprovalRequest, RequestToPay,
     };
     use std::{env, time::Duration};
     use tokio::{sync::OnceCell, time::timeout};
@@ -14,30 +19,30 @@ mod tests {
     static MOMO: OnceCell<Momo> = OnceCell::const_new();
 
     // Helper function to drain all pending callbacks from a stream
-    async fn drain_stream<S>(stream: &mut S) -> usize 
+    async fn drain_stream<S>(stream: &mut S) -> usize
     where
-        S: Stream<Item = MomoUpdates> + Unpin
+        S: Stream<Item = MomoUpdates> + Unpin,
     {
         let mut drained_count = 0;
         let drain_timeout = Duration::from_millis(100); // Short timeout for draining
-        
+
         while let Ok(Some(_)) = timeout(drain_timeout, stream.next()).await {
             drained_count += 1;
             println!("🧹 Drained stale callback #{}", drained_count);
-            
+
             // Safety check to prevent infinite loops
             if drained_count > 50 {
                 println!("⚠️  Stopped draining after 50 callbacks to prevent infinite loop");
                 break;
             }
         }
-        
+
         if drained_count > 0 {
             println!("🧹 Total drained: {} stale callbacks", drained_count);
         } else {
             println!("✅ Stream was already clean");
         }
-        
+
         drained_count
     }
 
@@ -84,8 +89,6 @@ mod tests {
         assert!(stream_result.is_ok());
         let mut stream = stream_result.unwrap().boxed();
 
-
-
         let request = RequestToPay::new(
             "100".to_string(),
             Currency::EUR,
@@ -94,16 +97,13 @@ mod tests {
             "test_payee_note".to_string(),
         );
 
-        let callback_url = env::var("CALLBACK_SERVER_URL")
-            .unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
-
-        
+        let callback_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| {
+            "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string()
+        });
 
         let request_to_pay_result = collection
             .request_to_pay(request.clone(), Some(&callback_url))
             .await;
-
-
 
         assert!(request_to_pay_result.is_ok());
 
@@ -149,9 +149,8 @@ mod tests {
                 let collection = momo.collection(primary_key, secondary_key);
 
                 let mut callback_helper = CallbackTestHelper::new()
-                .await
-                .expect("Failed to start callback listener");
-
+                    .await
+                    .expect("Failed to start callback listener");
 
                 let stream_result = callback_helper.listen().await;
                 assert!(stream_result.is_ok());
@@ -174,13 +173,9 @@ mod tests {
                     "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string()
                 });
 
-                
-
                 let request_to_pay_result = collection
                     .request_to_pay(request.clone(), Some(&call_back_server_url))
                     .await;
-
-
 
                 assert!(request_to_pay_result.is_ok());
 
@@ -297,9 +292,8 @@ mod tests {
         let collection = momo.collection(primary_key, secondary_key);
 
         let mut callback_helper = CallbackTestHelper::new()
-        .await
-        .expect("Failed to start callback listener");
-
+            .await
+            .expect("Failed to start callback listener");
 
         let payer: Party = Party {
             party_id_type: PartyIdType::MSISDN,
@@ -313,19 +307,20 @@ mod tests {
             "test_payee_note".to_string(),
         );
 
-        let call_back_server_url = env::var("CALLBACK_SERVER_URL")
-            .unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| {
+            "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string()
+        });
 
-                        let stream_result = callback_helper.listen().await;
-                assert!(stream_result.is_ok());
-                let mut stream = stream_result.unwrap().boxed();
+        let stream_result = callback_helper.listen().await;
+        assert!(stream_result.is_ok());
+        let mut stream = stream_result.unwrap().boxed();
 
         let res = collection
             .request_to_withdraw_v1(request.clone(), Some(&call_back_server_url))
             .await
             .expect("Error requesting to withdraw");
         assert_ne!(res.as_str().len(), 0);
-                if let Some(callback) = stream.next().await {
+        if let Some(callback) = stream.next().await {
             if let mtnmomo::CallbackResponse::RequestToPaySuccess {
                 financial_transaction_id,
                 external_id,
@@ -367,8 +362,8 @@ mod tests {
                 let collection = momo.collection(primary_key, secondary_key);
 
                 let mut callback_helper = CallbackTestHelper::new()
-                .await
-                .expect("Failed to start callback listener");
+                    .await
+                    .expect("Failed to start callback listener");
 
                 let payer: Party = Party {
                     party_id_type: PartyIdType::MSISDN,
@@ -397,7 +392,7 @@ mod tests {
 
                 assert!(request_to_withdraw_result.is_ok());
 
-                                if let Some(callback) = stream.next().await {
+                if let Some(callback) = stream.next().await {
                     if let mtnmomo::CallbackResponse::RequestToPayFailed {
                         financial_transaction_id: _,
                         external_id,
@@ -407,7 +402,7 @@ mod tests {
                         payee_note,
                         payer_message: _, // ignore if not needed
                         status,
-                        reason,
+                        reason: _, // ignore if not needed
                     } = callback.response
                     {
                         assert_eq!(payer.party_id, request.payer.party_id);
@@ -429,10 +424,7 @@ mod tests {
         };
     }
 
-    test_request_to_withdraw_failure!(
-        test_request_to_withdraw_payer_failed,
-        "46733123450"
-    );
+    test_request_to_withdraw_failure!(test_request_to_withdraw_payer_failed, "46733123450");
 
     #[tokio::test]
     async fn test_pre_approval_successful() {
@@ -445,7 +437,7 @@ mod tests {
         let mut callback_helper = CallbackTestHelper::new()
             .await
             .expect("Failed to start callback listener");
-        
+
         let stream_result = callback_helper.listen().await;
         assert!(stream_result.is_ok());
         let mut stream = stream_result.unwrap().boxed();
@@ -461,19 +453,23 @@ mod tests {
             validity_time: 3600,
         };
 
-        let call_back_server_url = env::var("CALLBACK_SERVER_URL")
-            .unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| {
+            "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string()
+        });
 
-       
         let res = collection
             .pre_approval(preapproval.clone(), Some(&call_back_server_url))
             .await;
         assert!(res.is_ok());
 
-
-
         if let Some(callback) = stream.next().await {
-            if let mtnmomo::CallbackResponse::PreApprovalSuccess { payer, payer_currency, status, expiration_date_time } = callback.response {
+            if let mtnmomo::CallbackResponse::PreApprovalSuccess {
+                payer,
+                payer_currency,
+                status,
+                expiration_date_time,
+            } = callback.response
+            {
                 assert_eq!(payer.party_id, "22997108557");
                 assert_eq!(payer_currency, "EUR");
                 assert_eq!(status, PreApprovalSuccessfulStatus::SUCCESSFUL);
@@ -502,17 +498,14 @@ mod tests {
                 let collection = momo.collection(primary_key, secondary_key);
 
                 let mut callback_helper = CallbackTestHelper::new()
-                .await
-                .expect("Failed to start callback listener");
+                    .await
+                    .expect("Failed to start callback listener");
 
                 let stream_result = callback_helper.listen().await;
-                    assert!(stream_result.is_ok());
-                    let mut stream = stream_result.unwrap().boxed();
-
-
+                assert!(stream_result.is_ok());
+                let mut stream = stream_result.unwrap().boxed();
 
                 // Clear any previous callbacks before waiting for our specific callback
-                
 
                 let user: Party = Party {
                     party_id_type: PartyIdType::MSISDN,
@@ -529,17 +522,19 @@ mod tests {
                     "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string()
                 });
 
-                
-
                 let res = collection
                     .pre_approval(preapproval.clone(), Some(&call_back_server_url))
                     .await;
                 assert!(res.is_ok());
 
-                
-
                 if let Some(callback) = stream.next().await {
-                    if let mtnmomo::CallbackResponse::PreApprovalCreated { payer, payer_currency, status, expiration_date_time } = callback.response {
+                    if let mtnmomo::CallbackResponse::PreApprovalCreated {
+                        payer,
+                        payer_currency,
+                        status,
+                        expiration_date_time,
+                    } = callback.response
+                    {
                         assert_eq!(payer.party_id, $phone_number);
                         assert_eq!(payer_currency, "EUR");
                         assert_eq!(status, PreApprovalCreatedStatus::CREATED);
@@ -557,103 +552,97 @@ mod tests {
         };
     }
 
-    test_pre_approval_created!(
-        test_pre_approval_payer_ongoing,
-        "46733123453"
-    );
-    test_pre_approval_created!(
-        test_pre_approval_payer_delayed,
-        "46733123454"
-    );
+    test_pre_approval_created!(test_pre_approval_payer_ongoing, "46733123453");
+    test_pre_approval_created!(test_pre_approval_payer_delayed, "46733123454");
 
     // Test for PreApprovalFailed state
-macro_rules! test_pre_approval_failure {
-    ($test_name:ident, $phone_number:expr, $expected_reason:expr) => {
-        #[tokio::test]
-        async fn $test_name() {
-            let momo = get_momo().await;
-            let primary_key =
-                env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
-            let secondary_key =
-                env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
-            let collection = momo.collection(primary_key, secondary_key);
+    macro_rules! test_pre_approval_failure {
+        ($test_name:ident, $phone_number:expr, $expected_reason:expr) => {
+            #[tokio::test]
+            async fn $test_name() {
+                let momo = get_momo().await;
+                let primary_key =
+                    env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+                let secondary_key =
+                    env::var("MTN_COLLECTION_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
+                let collection = momo.collection(primary_key, secondary_key);
 
-            let mut callback_helper = CallbackTestHelper::new()
-            .await
-            .expect("Failed to start callback listener");
+                let mut callback_helper = CallbackTestHelper::new()
+                    .await
+                    .expect("Failed to start callback listener");
 
-        let stream_result = callback_helper.listen().await;
+                let stream_result = callback_helper.listen().await;
                 assert!(stream_result.is_ok());
                 let mut stream = stream_result.unwrap().boxed();
 
-            // Clear any previous callbacks before waiting for our specific callback
-            
+                // Clear any previous callbacks before waiting for our specific callback
 
-            let user: Party = Party {
-                party_id_type: PartyIdType::MSISDN,
-                party_id: $phone_number.to_string(),
-            };
-            let preapproval = PreApprovalRequest {
-                payer: user,
-                payer_currency: Currency::EUR.to_string(),
-                payer_message: "".to_string(),
-                validity_time: 3600,
-            };
+                let user: Party = Party {
+                    party_id_type: PartyIdType::MSISDN,
+                    party_id: $phone_number.to_string(),
+                };
+                let preapproval = PreApprovalRequest {
+                    payer: user,
+                    payer_currency: Currency::EUR.to_string(),
+                    payer_message: "".to_string(),
+                    validity_time: 3600,
+                };
 
-            let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| {
-                "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string()
-            });
+                let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| {
+                    "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string()
+                });
 
-            
-            let res = collection
-                .pre_approval(preapproval.clone(), Some(&call_back_server_url))
-                .await;
-            assert!(res.is_ok());
+                let res = collection
+                    .pre_approval(preapproval.clone(), Some(&call_back_server_url))
+                    .await;
+                assert!(res.is_ok());
 
-                
+                if let Some(callback) = stream.next().await {
+                    if let mtnmomo::CallbackResponse::PreApprovalFailed {
+                        payer,
+                        payer_currency,
+                        expiration_date_time,
+                        status: _,
+                        reason,
+                    } = callback.response
+                    {
+                        assert_eq!(payer.party_id, $phone_number);
+                        assert_eq!(payer_currency, "EUR");
+                        assert!(!expiration_date_time.is_empty());
 
-
-
-            if let Some(callback) = stream.next().await {
-                if let mtnmomo::CallbackResponse::PreApprovalFailed { payer, payer_currency, expiration_date_time, status, reason } = callback.response {
-                    assert_eq!(payer.party_id, $phone_number);
-                    assert_eq!(payer_currency, "EUR");
-                    assert!(!expiration_date_time.is_empty());
-                    
-                    // Handle optional expected reason
-                    match $expected_reason {
-                        Some(expected_reason) => {
-                            if let Some(actual_reason) = reason {
-                                assert_eq!(actual_reason, expected_reason);
-                            } else {
-                                panic!("Expected failure reason {:?}, but got None", expected_reason);
+                        // Handle optional expected reason
+                        match $expected_reason {
+                            Some(expected_reason) => {
+                                if let Some(actual_reason) = reason {
+                                    assert_eq!(actual_reason, expected_reason);
+                                } else {
+                                    panic!(
+                                        "Expected failure reason {:?}, but got None",
+                                        expected_reason
+                                    );
+                                }
+                            }
+                            None => {
+                                if reason.is_some() {
+                                    panic!("Expected no failure reason, but got {:?}", reason);
+                                }
+                                // else: expected None and got None, which is correct
                             }
                         }
-                        None => {
-                            if reason.is_some() {
-                                panic!("Expected no failure reason, but got {:?}", reason);
-                            }
-                            // else: expected None and got None, which is correct
-                        }
+                    } else {
+                        panic!(
+                            "Expected PreApprovalFailed callback, got {:?}",
+                            callback.response
+                        );
                     }
                 } else {
-                    panic!(
-                        "Expected PreApprovalFailed callback, got {:?}",
-                        callback.response
-                    );
+                    panic!("Did not receive callback");
                 }
-            } else {
-                panic!("Did not receive callback");
             }
-        }
-    };
-}
+        };
+    }
 
-    test_pre_approval_failure!(
-        test_pre_approval_payer_failed,
-        "46733123450",
-        None
-    );
+    test_pre_approval_failure!(test_pre_approval_payer_failed, "46733123450", None);
     test_pre_approval_failure!(
         test_pre_approval_payer_rejected,
         "46733123451",

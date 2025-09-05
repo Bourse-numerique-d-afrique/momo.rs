@@ -1,6 +1,6 @@
 mod common;
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "skip-integration-tests")))]
 mod tests {
     use mtnmomo::{Currency, InvoiceRequest, Momo, Party, PartyIdType};
     use std::env;
@@ -14,7 +14,8 @@ mod tests {
             let subscription_key =
                 env::var("MTN_COLLECTION_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
 
-            let callback_host = env::var("MTN_CALLBACK_HOST").unwrap_or_else(|_| "webhook.site".to_string());
+            let callback_host =
+                env::var("MTN_CALLBACK_HOST").unwrap_or_else(|_| "webhook.site".to_string());
 
             println!("Using MTN_CALLBACK_HOST: {}", callback_host);
             let momo_result =
@@ -51,7 +52,9 @@ mod tests {
             "test".to_string(),
         );
 
-        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| {
+            "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string()
+        });
 
         let invoice_id = collection
             .create_invoice(invoice, Some(&call_back_server_url))
@@ -59,7 +62,7 @@ mod tests {
             .expect("Error creating invoice");
 
         let res = collection
-            .cancel_invoice(&invoice_id.as_str(), Some(&call_back_server_url))
+            .cancel_invoice(invoice_id.as_str(), Some(&call_back_server_url))
             .await;
         assert!(res.is_ok());
     }

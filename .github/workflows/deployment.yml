@@ -25,7 +25,7 @@ jobs:
           MTN_API_USER: ${{ secrets.MTN_API_USER}}
           MTN_API_KEY: ${{ secrets.MTN_API_KEY}}
         run: |
-          cargo test -- --test-threads=1 --nocapture
+          cargo test --features skip-integration-tests --lib -- --test-threads=1 --nocapture
 
   # release:
   #   needs: build

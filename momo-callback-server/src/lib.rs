@@ -65,18 +65,18 @@
 //! use mtnmomo::CallbackResponse;
 //!
 //! match &update.response {
-//!     CallbackResponse::RequestToPaySuccess { 
-//!         external_id, 
-//!         amount, 
-//!         currency, 
-//!         .. 
+//!     CallbackResponse::RequestToPaySuccess {
+//!         external_id,
+//!         amount,
+//!         currency,
+//!         ..
 //!     } => {
 //!         // Handle successful payment
 //!     }
-//!     CallbackResponse::RequestToPayFailed { 
-//!         external_id, 
-//!         reason, 
-//!         .. 
+//!     CallbackResponse::RequestToPayFailed {
+//!         external_id,
+//!         reason,
+//!         ..
 //!     } => {
 //!         // Handle failed payment
 //!     }
@@ -91,8 +91,4 @@ mod main_impl {
     include!("main.rs");
 }
 
-pub use main_impl::{
-    CallbackServerConfig,
-    start_callback_server,
-    create_callback_routes,
-};
+pub use main_impl::{create_callback_routes, start_callback_server, CallbackServerConfig};

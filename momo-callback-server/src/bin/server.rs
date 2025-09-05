@@ -5,7 +5,7 @@ use futures_util::StreamExt;
 use tracing::info;
 use tracing_subscriber;
 
-use momo_callback_server::{CallbackServerConfig, start_callback_server};
+use momo_callback_server::{start_callback_server, CallbackServerConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -21,15 +21,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Start the callback server
     let callback_stream = start_callback_server(config).await?;
-    
+
     info!("Server is running. Press Ctrl+C to stop.");
-    
+
     // Process incoming callbacks
     use futures_util::pin_mut;
     pin_mut!(callback_stream);
     while let Some(update) = callback_stream.next().await {
         info!("From: {}", update.remote_address);
-        
+
         // Here you can add custom business logic to handle different callback types
         info!("Callback: {:?}", update.response);
     }

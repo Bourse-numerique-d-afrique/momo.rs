@@ -1,6 +1,6 @@
 mod common;
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "skip-integration-tests")))]
 mod tests {
     use crate::common::CallbackTestHelper;
     use futures_util::StreamExt;
@@ -70,8 +70,9 @@ mod tests {
             "M".to_string(),
         );
 
-        let call_back_server_url = env::var("CALLBACK_SERVER_URL")
-            .unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| {
+            "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string()
+        });
 
         let res = remittance
             .cash_transfer(request.clone(), Some(&call_back_server_url))
@@ -79,7 +80,7 @@ mod tests {
         println!("Cash transfer result: {:?}", res);
         assert!(res.is_ok());
 
-    if let Some(callback) = stream.next().await {
+        if let Some(callback) = stream.next().await {
             if let mtnmomo::CallbackResponse::CashTransferSucceeded { external_id, .. } =
                 callback.response
             {
@@ -94,7 +95,6 @@ mod tests {
             panic!("Did not receive callback");
         }
     }
-
 
     #[tokio::test]
     async fn test_transfer_successful() {
@@ -124,16 +124,17 @@ mod tests {
             "payee_note".to_string(),
         );
 
-        let call_back_server_url = env::var("CALLBACK_SERVER_URL")
-            .unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| {
+            "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string()
+        });
 
         let result = remittance
             .transfer(transfer.clone(), Some(&call_back_server_url))
             .await;
         assert!(result.is_ok());
 
-    if let Some(callback) = stream.next().await {
-            if let mtnmomo::CallbackResponse::RemittanceTransferSuccess { external_id, .. } =
+        if let Some(callback) = stream.next().await {
+            if let mtnmomo::CallbackResponse::TransactionSuccess { external_id, .. } =
                 callback.response
             {
                 assert_eq!(external_id, transfer.external_id);
@@ -189,14 +190,14 @@ mod tests {
                 assert!(result.is_ok());
 
                 if let Some(callback) = stream.next().await {
-                    if let mtnmomo::CallbackResponse::RemittanceTransferFailed {
-                        error_reason,
+                    if let mtnmomo::CallbackResponse::TransactionFailed {
+                        reason,
                         external_id,
-                        .. 
+                        ..
                     } = callback.response
                     {
                         assert_eq!(external_id, transfer.external_id);
-                        assert_eq!(error_reason, $expected_reason);
+                        assert_eq!(reason, $expected_reason);
                     } else {
                         panic!(
                             "Expected RemittanceTransferFailed callback, got {:?}",
@@ -233,22 +234,22 @@ mod tests {
     test_transfer_failure!(
         test_transfer_payee_delayed,
         "46733123454",
-        Some(RequestToPayReason::PAYERDELAYED)
+        Some(RequestToPayReason::PAYEEDELAYED)
     );
     test_transfer_failure!(
         test_transfer_payee_not_enough_funds,
         "46733123455",
-        Some(RequestToPayReason::COULDNOTPERFORMTRANSACTION)
+        Some(RequestToPayReason::NOTENOUGHFUNDS)
     );
     test_transfer_failure!(
         test_transfer_payee_payer_limit_reached,
         "46733123456",
-        Some(RequestToPayReason::COULDNOTPERFORMTRANSACTION)
+        Some(RequestToPayReason::PAYERLIMITREACHED)
     );
     test_transfer_failure!(
         test_transfer_payee_not_found,
         "46733123457",
-        Some(RequestToPayReason::PAYERNOTFOUND)
+        Some(RequestToPayReason::PAYEENOTFOUND)
     );
     test_transfer_failure!(
         test_transfer_payee_not_allowed,

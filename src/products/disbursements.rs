@@ -143,7 +143,6 @@ impl Disbursements {
         .await
     }
 
-
     /// Deposit operation is used to deposit an amount from the owner’s account to a payee account.
     /// Status of the transaction can be validated by using the GET /deposit/{referenceId}
     ///
@@ -173,7 +172,10 @@ impl Disbursements {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", format!("{}/disbursement_deposit_v1", callback_url));
+                req = req.header(
+                    "X-Callback-Url",
+                    format!("{}/disbursement_deposit_v1", callback_url),
+                );
             }
         }
 
@@ -215,7 +217,10 @@ impl Disbursements {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", format!("{}/disbursement_deposit_v2", callback_url));
+                req = req.header(
+                    "X-Callback-Url",
+                    format!("{}/disbursement_deposit_v2", callback_url),
+                );
             }
         }
 
@@ -355,7 +360,6 @@ impl Disbursements {
         refund: RefundRequest,
         callback_url: Option<&str>,
     ) -> Result<RefundId, Box<dyn std::error::Error>> {
-
         println!("Refund request: {:?}", serde_json::to_string(&refund)?);
         let client = reqwest::Client::new();
         let refund_id = uuid::Uuid::new_v4().to_string();
@@ -372,7 +376,10 @@ impl Disbursements {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("x-callback-url", format!("{}/disbursement_refund_v1", callback_url));
+                req = req.header(
+                    "x-callback-url",
+                    format!("{}/disbursement_refund_v1", callback_url),
+                );
             }
         }
 
@@ -417,7 +424,10 @@ impl Disbursements {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", format!("{}/disbursement_refund_v2", callback_url));
+                req = req.header(
+                    "X-Callback-Url",
+                    format!("{}/disbursement_refund_v2", callback_url),
+                );
             }
         }
 
@@ -459,7 +469,10 @@ impl Disbursements {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("X-Callback-Url", format!("{}/disbursement_transfer", callback_url));
+                req = req.header(
+                    "X-Callback-Url",
+                    format!("{}/disbursement_transfer", callback_url),
+                );
             }
         }
 

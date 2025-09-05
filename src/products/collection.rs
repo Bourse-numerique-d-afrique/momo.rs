@@ -176,7 +176,10 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("x-callback-url", format!("{}/collection_invoice", callback_url));
+                req = req.header(
+                    "x-callback-url",
+                    format!("{}/collection_invoice", callback_url),
+                );
             }
         }
 
@@ -217,7 +220,10 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("x-callback-url", format!("{}/collection_invoice", callback_url));
+                req = req.header(
+                    "x-callback-url",
+                    format!("{}/collection_invoice", callback_url),
+                );
             }
         }
 
@@ -258,7 +264,10 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("x-callback-url", format!("{}/collection_payment", callback_url));
+                req = req.header(
+                    "x-callback-url",
+                    format!("{}/collection_payment", callback_url),
+                );
             }
         }
 
@@ -407,7 +416,10 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("x-callback-url", format!("{}/collection_preapproval", callback_url));
+                req = req.header(
+                    "x-callback-url",
+                    format!("{}/collection_preapproval", callback_url),
+                );
             }
         }
 
@@ -453,7 +465,10 @@ impl Collection {
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
                 println!("Using callback_url: {}", callback_url);
-                req = req.header("x-callback-url", format!("{}/collection_request_to_pay", callback_url));
+                req = req.header(
+                    "x-callback-url",
+                    format!("{}/collection_request_to_pay", callback_url),
+                );
             }
         }
 
@@ -607,7 +622,10 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("x-callback-url", format!("{}/collection_request_to_withdraw_v1", callback_url));
+                req = req.header(
+                    "x-callback-url",
+                    format!("{}/collection_request_to_withdraw_v1", callback_url),
+                );
             }
         }
 
@@ -651,7 +669,10 @@ impl Collection {
 
         if let Some(callback_url) = callback_url {
             if !callback_url.is_empty() {
-                req = req.header("x-callback-url", format!("{}/collection_request_to_withdraw_v2", callback_url));
+                req = req.header(
+                    "x-callback-url",
+                    format!("{}/collection_request_to_withdraw_v2", callback_url),
+                );
             }
         }
 
@@ -1187,9 +1208,7 @@ mod tests {
             validity_time: 3600,
         };
         let res = collection.pre_approval(preapproval, None).await;
-        if res.is_ok() {
-            assert!(true);
-        }
+        assert!(res.is_ok());
     }
 
     #[tokio::test]

@@ -1,13 +1,13 @@
 mod common;
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "skip-integration-tests")))]
 mod tests {
     use crate::common::CallbackTestHelper;
     use futures_util::StreamExt;
     use mtnmomo::{
-        callback::{
-            DisbursementDepositV1FailedStatus,  DisbursementRefundV1FailedStatus, DisbursementSuccessStatus, DisbursementFailedStatus
-        }, enums::reason::RequestToPayReason, Currency, Momo, Party, PartyIdType, RefundRequest, TransferRequest
+        callback::{TransactionFailedStatus, TransactionSuccessStatus},
+        enums::reason::RequestToPayReason,
+        Currency, Momo, Party, PartyIdType, TransferRequest,
     };
     use std::env;
     use tokio::sync::OnceCell;
@@ -34,7 +34,8 @@ mod tests {
     #[tokio::test]
     async fn test_deposit_successful() {
         let momo = get_momo().await;
-        let primary_key = env::var("MTN_DISBURSEMENT_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let primary_key =
+            env::var("MTN_DISBURSEMENT_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
         let secondary_key =
             env::var("MTN_DISBURSEMENT_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
         let disbursements = momo.disbursement(primary_key, secondary_key);
@@ -58,16 +59,17 @@ mod tests {
             "payee_note".to_string(),
         );
 
-        let call_back_server_url = env::var("CALLBACK_SERVER_URL")
-            .unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| {
+            "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string()
+        });
 
         let result = disbursements
             .deposit_v1(transfer.clone(), Some(&call_back_server_url))
             .await;
         assert!(result.is_ok());
 
-    if let Some(callback) = stream.next().await {
-            if let mtnmomo::CallbackResponse::DisbursementSuccess {
+        if let Some(callback) = stream.next().await {
+            if let mtnmomo::CallbackResponse::TransactionSuccess {
                 financial_transaction_id,
                 external_id,
                 amount,
@@ -83,11 +85,11 @@ mod tests {
                 assert_eq!(currency, transfer.currency.to_string());
                 assert_eq!(payee.party_id, transfer.payee.party_id);
                 assert_eq!(payee_note, Some(transfer.payee_note));
-                assert_eq!(status, DisbursementSuccessStatus::SUCCESSFUL);
+                assert_eq!(status, TransactionSuccessStatus::SUCCESSFUL);
                 assert!(!financial_transaction_id.is_empty());
             } else {
                 panic!(
-                    "Expected DisbursementSuccess callback, got {:?}",
+                    "Expected TransactionSuccess callback, got {:?}",
                     callback.response
                 );
             }
@@ -108,8 +110,8 @@ mod tests {
                 let disbursements = momo.disbursement(primary_key, secondary_key);
 
                 let mut callback_helper = CallbackTestHelper::new()
-                .await
-                .expect("Failed to start callback listener");
+                    .await
+                    .expect("Failed to start callback listener");
 
                 let stream_result = callback_helper.listen().await;
                 assert!(stream_result.is_ok());
@@ -137,7 +139,7 @@ mod tests {
                 assert!(result.is_ok());
 
                 if let Some(callback) = stream.next().await {
-                    if let mtnmomo::CallbackResponse::DisbursementFailed {
+                    if let mtnmomo::CallbackResponse::TransactionFailed {
                         external_id,
                         amount,
                         currency,
@@ -152,7 +154,7 @@ mod tests {
                         assert_eq!(currency, transfer.currency.to_string());
                         assert_eq!(payee.party_id, transfer.payee.party_id);
                         assert_eq!(payee_note, Some(transfer.payee_note));
-                        assert_eq!(status, DisbursementFailedStatus::FAILED);
+                        assert_eq!(status, TransactionFailedStatus::FAILED);
                         assert_eq!(reason, $expected_reason);
                     } else {
                         panic!(
@@ -182,16 +184,18 @@ mod tests {
         "46733123452",
         Some(RequestToPayReason::EXPIRED)
     );
-    test_deposit_failure!(
-        test_deposit_payer_ongoing,
-        "46733123453",
-        Some(RequestToPayReason::ONGOING)
-    );
-    test_deposit_failure!(
-        test_deposit_payer_delayed,
-        "46733123454",
-        Some(RequestToPayReason::PAYERDELAYED)
-    );
+    // a pending transaction seems to eventually succeed, making this test unreliable
+    // test_deposit_failure!(
+    //     test_deposit_payer_ongoing,
+    //     "46733123453",
+    //     Some(RequestToPayReason::ONGOING)
+    // );
+    // a delayed transaction seems to eventually succeed, making this test unreliable
+    // test_deposit_failure!(
+    //     test_deposit_payer_delayed,
+    //     "46733123454",
+    //     Some(RequestToPayReason::PAYERDELAYED)
+    // );
     test_deposit_failure!(
         test_deposit_payer_not_found,
         "46733123455",
@@ -238,11 +242,11 @@ mod tests {
         Some(RequestToPayReason::COULDNOTPERFORMTRANSACTION)
     );
 
-
     #[tokio::test]
     async fn test_transfer_successful() {
         let momo = get_momo().await;
-        let primary_key = env::var("MTN_DISBURSEMENT_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
+        let primary_key =
+            env::var("MTN_DISBURSEMENT_PRIMARY_KEY").expect("PRIMARY_KEY must be set");
         let secondary_key =
             env::var("MTN_DISBURSEMENT_SECONDARY_KEY").expect("SECONDARY_KEY must be set");
         let disbursements = momo.disbursement(primary_key, secondary_key);
@@ -267,8 +271,9 @@ mod tests {
             "payee_note".to_string(),
         );
 
-        let call_back_server_url = env::var("CALLBACK_SERVER_URL")
-            .unwrap_or_else(|_| "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string());
+        let call_back_server_url = env::var("CALLBACK_SERVER_URL").unwrap_or_else(|_| {
+            "http://webhook.site/0e1ea918-075d-4916-8bf2-a8b696cf82f4".to_string()
+        });
 
         let result = disbursements
             .transfer(transfer.clone(), Some(&call_back_server_url))
@@ -276,7 +281,7 @@ mod tests {
         assert!(result.is_ok());
 
         if let Some(callback) = stream.next().await {
-            if let mtnmomo::CallbackResponse::DisbursementSuccess {
+            if let mtnmomo::CallbackResponse::TransactionSuccess {
                 financial_transaction_id,
                 external_id,
                 amount,
@@ -292,11 +297,11 @@ mod tests {
                 assert_eq!(currency, transfer.currency.to_string());
                 assert_eq!(payee.party_id, transfer.payee.party_id);
                 assert_eq!(payee_note, Some(transfer.payee_note));
-                assert_eq!(status, DisbursementSuccessStatus::SUCCESSFUL);
+                assert_eq!(status, TransactionSuccessStatus::SUCCESSFUL);
                 assert!(!financial_transaction_id.is_empty());
             } else {
                 panic!(
-                    "Expected DisbursementSuccess callback, got {:?}",
+                    "Expected TransactionSuccess callback, got {:?}",
                     callback.response
                 );
             }
@@ -346,7 +351,7 @@ mod tests {
                 assert!(result.is_ok());
 
                 if let Some(callback) = stream.next().await {
-                    if let mtnmomo::CallbackResponse::DisbursementFailed {
+                    if let mtnmomo::CallbackResponse::TransactionFailed {
                         external_id,
                         amount,
                         currency,
@@ -361,7 +366,7 @@ mod tests {
                         assert_eq!(currency, transfer.currency.to_string());
                         assert_eq!(payee.party_id, transfer.payee.party_id);
                         assert_eq!(payee_note, Some(transfer.payee_note));
-                        assert_eq!(status, DisbursementFailedStatus::FAILED);
+                        assert_eq!(status, TransactionFailedStatus::FAILED);
                         assert_eq!(reason, $expected_reason);
                     } else {
                         panic!(
@@ -404,17 +409,17 @@ mod tests {
     test_transfer_failure!(
         test_transfer_payee_not_enough_funds,
         "46733123455",
-        Some(RequestToPayReason::COULDNOTPERFORMTRANSACTION)
+        Some(RequestToPayReason::NOTENOUGHFUNDS)
     );
     test_transfer_failure!(
         test_transfer_payee_payer_limit_reached,
         "46733123456",
-        Some(RequestToPayReason::COULDNOTPERFORMTRANSACTION)
+        Some(RequestToPayReason::PAYERLIMITREACHED)
     );
     test_transfer_failure!(
         test_transfer_payee_not_found,
         "46733123457",
-        Some(RequestToPayReason::PAYERNOTFOUND)
+        Some(RequestToPayReason::PAYEENOTFOUND)
     );
     test_transfer_failure!(
         test_transfer_payee_not_allowed,

@@ -456,7 +456,7 @@ pub async fn start_callback_server(
     
     // Create the application with routes and middleware
     let app = create_callback_routes()
-        .with(poem::middleware::Tracing::default())
+        .with(poem::middleware::Tracing)
         .with(poem::middleware::Cors::new())
         .with(poem::middleware::Compression::default())
         .with(poem::middleware::RequestId::default())
