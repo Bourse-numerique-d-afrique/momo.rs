@@ -3,7 +3,7 @@
 [![crates.io](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/publish.yml/badge.svg)](https://github.com/Bourse-numerique-d-afrique/momo.rs/actions/workflows/publish.yml)
 [![Crates.io](https://img.shields.io/crates/v/mtnmomo.svg)](https://crates.io/crates/mtnmomo)
 [![MIT licensed](https://img.shields.io/badge/License-MIT-yellow.svg)](https://choosealicense.com/licenses/mit/)
-[![Docs](https://img.shields.io/badge/docs-yes-brightgreen.svg)](https://docs.rs/mtnmomo/0.1.8/mtnmomo/)
+[![Docs](https://img.shields.io/badge/docs-yes-brightgreen.svg)](https://docs.rs/mtnmomo/0.1.9/mtnmomo/)
 
 <div align="center">
 
@@ -15,7 +15,7 @@
 ### Installation
 ```toml
 [dependencies]
-mtnmomo = "0.1.8"
+mtnmomo = "0.1.9"
 ```
 
 or you can use cargo add
@@ -122,49 +122,23 @@ When using the sandbox environment, you should use MTN's predefined test phone n
 
 ### Callback Server
 
-This library includes a standalone callback server (`momo-callback-server`) for handling MTN MoMo webhooks. The callback server runs on port 8500 (localhost only) and processes payment notifications from MTN MoMo API. For production deployments, TLS is handled by a reverse proxy like Caddy2.
+This library includes an optional callback server feature for handling MTN MoMo webhooks. The callback server runs on port 8500 (localhost only) and processes payment notifications from MTN MoMo API.
 
 #### Installation
 
-The callback server is now a separate crate that can be used as both a standalone binary and a library:
+To use the callback server, enable the `callback-server` feature:
 
 ```toml
 [dependencies]
-momo-callback-server = "0.1.8"
+mtnmomo = { version = "0.1.9", features = ["callback-server"] }
 ```
 
-Or add it to your existing project:
+#### Using the Callback Server
 
-```toml
-[dependencies]
-mtnmomo = "0.1.8"
-momo-callback-server = "0.1.8"
-```
-
-#### Using as a Standalone Binary
-
-To use the callback server as a standalone service:
-
-```bash
-# Clone the repository
-git clone https://github.com/Bourse-numerique-d-afrique/momo.rs
-cd momo.rs/momo-callback-server
-
-# Build the server
-cargo build --release
-
-# Run the server
-./target/release/momo-callback-server
-```
-
-The server will start on `http://127.0.0.1:8500`.
-
-#### Using as a Library
-
-You can also integrate the callback server directly into your application:
+You can integrate the callback server directly into your application:
 
 ```rust
-use momo_callback_server::{CallbackServerConfig, start_callback_server};
+use mtnmomo::{CallbackServerConfig, start_callback_server};
 use futures_util::StreamExt;
 
 #[tokio::main]
@@ -315,6 +289,6 @@ Now you can access your callback server at `https://test.domain.com` with a vali
 - **📡 Complete Callback Coverage**: Handles all MTN MoMo callback types
 - **🩺 Health Monitoring**: Built-in health check endpoint for load balancers
 - **🛡️ Production Ready**: Graceful shutdown, structured logging, comprehensive error handling
-- **🔧 Library and Binary**: Can be used as both a standalone binary and a library component
+- **🔧 Library Integration**: Can be integrated directly into your application
 - **🔌 Stream-based Processing**: Process callbacks as a stream for easy integration
 - **🔒 TLS with Caddy2**: Production-ready TLS termination with automatic certificate management
